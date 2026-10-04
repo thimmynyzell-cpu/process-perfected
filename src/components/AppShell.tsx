@@ -34,7 +34,7 @@ const NAV = [
   { to: "/settings", icon: Settings, key: "nav.settings" },
 ] as const;
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavLinks({ onNavigate }: { onNavigate?: (() => void) | undefined }) {
   const t = useT();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
@@ -63,7 +63,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function SidebarInner({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarInner({ onNavigate }: { onNavigate?: (() => void) | undefined }) {
   const t = useT();
   const { locale, setLocale } = useI18n();
   const { theme, toggle } = useTheme();
