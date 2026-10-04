@@ -53,7 +53,7 @@ export function useMembership() {
     queryKey: ["membership", userId],
     enabled: !loading && !!userId,
     queryFn: async (): Promise<Membership | null> => {
-      await supabase.rpc("ensure_profile", { p_full_name: null });
+      await supabase.rpc("ensure_profile", {});
       await supabase.rpc("accept_pending_invitations");
 
       const { data, error } = await supabase
