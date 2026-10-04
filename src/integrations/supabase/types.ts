@@ -443,6 +443,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_pending_invitations: { Args: never; Returns: number }
+      clone_template_version: {
+        Args: { p_template_id: string }
+        Returns: string
+      }
+      create_organization: { Args: { p_name: string }; Returns: string }
+      ensure_profile: { Args: { p_full_name?: string }; Returns: undefined }
       has_org_role: {
         Args: {
           _org: string
@@ -451,6 +458,10 @@ export type Database = {
         Returns: boolean
       }
       is_org_member: { Args: { _org: string }; Returns: boolean }
+      seed_demo_templates: {
+        Args: { _org: string; _user: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "manager" | "agent"
