@@ -4,7 +4,7 @@ import { translations, type Locale, type TranslationKey } from "./translations";
 type I18nValue = {
   locale: Locale;
   setLocale: (locale: Locale) => void;
-  t: (key: TranslationKey, vars?: Record<string, string | number>) => string;
+  t: (key: TranslationKey | (string & {}), vars?: Record<string, string | number>) => string;
 };
 
 const I18nContext = createContext<I18nValue | null>(null);
