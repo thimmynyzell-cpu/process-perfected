@@ -181,6 +181,13 @@ export const translations = {
     "landing.f3.text": "Historik, export och händelselogg för varje körning.",
 
     "error.generic": "Något gick fel. Försök igen.",
+    "run.due": "Förfallodatum",
+    "run.referenceShort": "Referens",
+    "team.you": "du",
+    "templates.readOnly": "Endast teamledare och administratörer kan ändra mallar.",
+    "templates.saved": "Ny version sparad.",
+    "history.template": "Mall",
+    "dashboard.viewAll": "Visa alla",
   },
   en: {
     "app.name": "Checklist",
@@ -364,6 +371,13 @@ export const translations = {
     "landing.f3.text": "History, exports and an audit log for every run.",
 
     "error.generic": "Something went wrong. Please try again.",
+    "run.due": "Due date",
+    "run.referenceShort": "Reference",
+    "team.you": "you",
+    "templates.readOnly": "Only managers and admins can edit templates.",
+    "templates.saved": "New version saved.",
+    "history.template": "Template",
+    "dashboard.viewAll": "View all",
   },
 } as const;
 
