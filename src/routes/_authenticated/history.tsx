@@ -56,9 +56,9 @@ function History({ ctx }: { ctx: OrgContext }) {
 
   async function exportCsv() {
     if (!planHas(ctx.organization.plan, "export")) {
-      return toast.error(t("limit.upgradeCta"), {
+      { toast.error(t("limit.upgradeCta"), {
         action: { label: t("billing.upgrade"), onClick: () => (window.location.href = "/billing") },
-      });
+      }); return; }
     }
     const ids = filtered.map((r) => r.id);
     const versionIds = Array.from(new Set(filtered.map((r) => r.version_id)));

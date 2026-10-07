@@ -31,7 +31,7 @@ function Onboarding() {
     setBusy(true);
     const { error } = await supabase.rpc("create_organization", { p_name: name });
     setBusy(false);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     await queryClient.invalidateQueries({ queryKey: ["membership"] });
     navigate({ to: "/dashboard" });
   }
