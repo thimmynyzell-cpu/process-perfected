@@ -56,7 +56,7 @@ function Templates({ ctx }: { ctx: OrgContext }) {
       .insert({ org_id: ctx.orgId, ...form, created_by: ctx.userId })
       .select()
       .single();
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     await supabase
       .from("template_versions")
       .insert({ template_id: tpl.id, org_id: ctx.orgId, version: 1, created_by: ctx.userId });
@@ -66,7 +66,7 @@ function Templates({ ctx }: { ctx: OrgContext }) {
   }
 
   async function duplicate(id: string) {
-    if (atLimit) return toast.error(t("limit.templates", { max: max ?? 0 }));
+    if (atLimit) { toast.error(t("limit.templates", { max: max ?? 0 })); return; }
     const src = all.find((x) => x.id === id)!;
     const { data: ver } = await supabase
       .from("template_versions")
@@ -86,7 +86,7 @@ function Templates({ ctx }: { ctx: OrgContext }) {
       })
       .select()
       .single();
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     const { data: newVer } = await supabase
       .from("template_versions")
       .insert({ template_id: tpl.id, org_id: ctx.orgId, version: 1, created_by: ctx.userId })
@@ -105,9 +105,9 @@ function Templates({ ctx }: { ctx: OrgContext }) {
   }
 
   async function setStatus(id: string, status: "active" | "archived") {
-    if (status === "active" && atLimit) return toast.error(t("limit.templates", { max: max ?? 0 }));
+    if (status === "active" && atLimit) { toast.error(t("limit.templates", { max: max ?? 0 })); return; }
     const { error } = await supabase.from("templates").update({ status }).eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     if (status === "archived") await logAudit(ctx.orgId, ctx.userId, "template.archived", "template", id);
     qc.invalidateQueries({ queryKey: ["templates", ctx.orgId] });
   }

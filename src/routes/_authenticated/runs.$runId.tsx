@@ -105,12 +105,12 @@ function RunView({ ctx }: { ctx: OrgContext }) {
 
   async function complete() {
     const missing = items.filter((i) => i.required && !isFilled(i, answers[i.id]));
-    if (missing.length) return toast.error(t("run.missingRequired"));
+    if (missing.length) { toast.error(t("run.missingRequired")); return; }
     const { error } = await supabase
       .from("runs")
       .update({ status: "completed", completed_at: new Date().toISOString() })
       .eq("id", runId);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     await logAudit(ctx.orgId, ctx.userId, "run.completed", "run", runId, { reference: run.reference });
     toast.success(t("run.completedToast"));
     qc.invalidateQueries({ queryKey: ["run", runId] });

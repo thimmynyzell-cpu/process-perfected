@@ -62,7 +62,7 @@ function Team({ ctx }: { ctx: OrgContext }) {
       .insert({ org_id: ctx.orgId, email: email.trim().toLowerCase(), role, invited_by: ctx.userId })
       .select()
       .single();
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     await logAudit(ctx.orgId, ctx.userId, "member.invited", "invitation", inv.id, { email: inv.email });
     toast.success(t("team.inviteSent"));
     setEmail("");

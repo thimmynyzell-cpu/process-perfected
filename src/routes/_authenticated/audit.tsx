@@ -28,7 +28,7 @@ function Audit({ ctx }: { ctx: OrgContext }) {
   const describe = (meta: unknown) => {
     if (!meta || typeof meta !== "object") return "";
     const m = meta as Record<string, unknown>;
-    return [m.title, m.reference, m.email].filter(Boolean).join(" · ");
+    return [m["title"], m["reference"], m["email"]].filter(Boolean).join(" · ");
   };
 
   return (

@@ -30,7 +30,7 @@ function Settings({ ctx }: { ctx: OrgContext }) {
       .from("organizations")
       .update({ name: name.trim(), logo_url: logo.trim() || null })
       .eq("id", ctx.orgId);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success(t("settings.saved"));
     qc.invalidateQueries({ queryKey: ["membership"] });
   }
