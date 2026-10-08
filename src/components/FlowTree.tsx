@@ -4,7 +4,7 @@ import type { FlowNode } from "@/lib/flow";
 import { branchValues } from "@/lib/flow";
 import { cn } from "@/lib/utils";
 
-export function FlowTree({ nodes, onSelect }: { nodes: FlowNode[]; onSelect?: (key: string) => void }) {
+export function FlowTree({ nodes, onSelect }: { nodes: FlowNode[]; onSelect?: ((key: string) => void) | undefined }) {
   const t = useT();
   if (!nodes.length) return <p className="text-sm text-muted-foreground">{t("flow.empty")}</p>;
   const roots = nodes.filter((n) => !n.parentKey || !nodes.some((p) => p.key === n.parentKey));
@@ -26,7 +26,7 @@ function Terminal({ icon, label }: { icon: React.ReactNode; label: string }) {
   );
 }
 
-function Chain({ nodes, all, onSelect }: { nodes: FlowNode[]; all: FlowNode[]; onSelect?: (key: string) => void }) {
+function Chain({ nodes, all, onSelect }: { nodes: FlowNode[]; all: FlowNode[]; onSelect?: ((key: string) => void) | undefined }) {
   return (
     <ol className="ml-3.5 border-l-2 border-border py-2 pl-5">
       {nodes.map((n) => (
@@ -36,7 +36,7 @@ function Chain({ nodes, all, onSelect }: { nodes: FlowNode[]; all: FlowNode[]; o
   );
 }
 
-function NodeView({ node, all, onSelect }: { node: FlowNode; all: FlowNode[]; onSelect?: (key: string) => void }) {
+function NodeView({ node, all, onSelect }: { node: FlowNode; all: FlowNode[]; onSelect?: ((key: string) => void) | undefined }) {
   const t = useT();
   const children = all.filter((c) => c.parentKey === node.key);
   const values = branchValues(node.type, node.options);
