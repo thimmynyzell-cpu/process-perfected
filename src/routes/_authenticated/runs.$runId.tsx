@@ -170,7 +170,7 @@ function RunView({ ctx }: { ctx: OrgContext }) {
       </div>
 
       <div className="space-y-6">
-        {sections.map((section, sIdx) => (
+        {sections.filter((s) => s.items.some((i) => vis.has(i.id))).map((section, sIdx) => (
           <section key={sIdx}>
             {section.name && (
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
