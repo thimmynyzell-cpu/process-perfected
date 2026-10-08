@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowUp, GitBranch, Network, Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FlowTree } from "@/components/FlowTree";
@@ -68,6 +68,23 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   const [meta, setMeta] = useState({ title: "", description: "", category: "" });
   const [items, setItems] = useState<DraftItem[]>([]);
   const [saving, setSaving] = useState(false);
+  const [flowOpen, setFlowOpen] = useState(false);
+  const [highlightKey, setHighlightKey] = useState<string | null>(null);
+  const itemRefs = useRef(new Map<string, HTMLLIElement>());
+
+  const jumpToItem = (key: string) => {
+    setFlowOpen(false);
+    setHighlightKey(key);
+    requestAnimationFrame(() => {
+      itemRefs.current.get(key)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  };
+
+  useEffect(() => {
+    if (!highlightKey) return;
+    const timer = setTimeout(() => setHighlightKey(null), 2500);
+    return () => clearTimeout(timer);
+  }, [highlightKey]);
 
   useEffect(() => {
     if (!query.data) return;
