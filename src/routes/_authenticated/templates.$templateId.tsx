@@ -220,7 +220,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         description={`${t("templates.version")} ${query.data.tpl.current_version}`}
         action={
           <div className="flex gap-2">
-            <Dialog>
+            <Dialog open={flowOpen} onOpenChange={setFlowOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
                   <Network className="size-4" /> {t("flow.show")}
@@ -231,7 +231,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                   <DialogTitle>{t("flow.title")}</DialogTitle>
                   <DialogDescription>{t("flow.desc")}</DialogDescription>
                 </DialogHeader>
-                <FlowTree nodes={flowNodes} />
+                <FlowTree nodes={flowNodes} onSelect={jumpToItem} />
               </DialogContent>
             </Dialog>
             {manage && (
