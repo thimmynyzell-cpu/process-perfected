@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { visibleKeys } from "@/lib/flow";
 
 type Item = Database["public"]["Tables"]["template_items"]["Row"];
 type Answer = { value: Json | null; note: string; photo_url: string };
@@ -73,7 +74,22 @@ function RunView({ ctx }: { ctx: OrgContext }) {
   if (query.isPending) return <Spinner />;
   if (query.error || !query.data) return <p className="text-muted-foreground">{t("error.generic")}</p>;
 
-  const { run, items } = query.data;
+  const { run } = query.data;
+  const all = query.data.items;
+  const posId = new Map(all.map((i) => [i.position, i.id]));
+  const vis = visibleKeys(
+    all.map((i) => ({
+      key: i.id,
+      label: i.label,
+      type: i.type,
+      required: i.required,
+      options: [],
+      parentKey: i.parent_position != null ? (posId.get(i.parent_position) ?? null) : null,
+      showWhen: i.show_when,
+    })),
+    Object.fromEntries(Object.entries(answers).map(([k, a]) => [k, a.value])),
+  );
+  const items = all.filter((i) => vis.has(i.id));
   const done = run.status === "completed";
   const filled = items.filter((i) => isFilled(i, answers[i.id])).length;
   const pct = items.length ? Math.round((filled / items.length) * 100) : 0;
@@ -154,7 +170,7 @@ function RunView({ ctx }: { ctx: OrgContext }) {
       </div>
 
       <div className="space-y-6">
-        {sections.map((section, sIdx) => (
+        {sections.filter((s) => s.items.some((i) => vis.has(i.id))).map((section, sIdx) => (
           <section key={sIdx}>
             {section.name && (
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -162,7 +178,7 @@ function RunView({ ctx }: { ctx: OrgContext }) {
               </h2>
             )}
             <ul className="divide-y rounded-xl border bg-card">
-              {section.items.map((item) => {
+              {section.items.filter((item) => vis.has(item.id)).map((item) => {
                 const a = current(item.id);
                 const ok = isFilled(item, a);
                 return (

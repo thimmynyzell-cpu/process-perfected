@@ -1,7 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, GitBranch, Network, Plus, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { FlowTree } from "@/components/FlowTree";
+import { branchValues, type FlowNode } from "@/lib/flow";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -26,7 +29,11 @@ type DraftItem = {
   allow_note: boolean;
   allow_photo: boolean;
   options: string;
+  parent: string;
+  show_when: string;
 };
+
+const optList = (s: string) => s.split("\n").map((o) => o.trim()).filter(Boolean);
 
 export const Route = createFileRoute("/_authenticated/templates/$templateId")({
   head: () => ({ meta: [{ title: "Redigera mall — Checklista" }] }),
@@ -66,8 +73,11 @@ function Editor({ ctx }: { ctx: OrgContext }) {
     if (!query.data) return;
     const { tpl, items } = query.data;
     setMeta({ title: tpl.title, description: tpl.description ?? "", category: tpl.category ?? "" });
+    const posKey = new Map(items.map((i) => [i.position, i.id]));
     setItems(
       items.map((i) => ({
+        parent: i.parent_position != null ? (posKey.get(i.parent_position) ?? "") : "",
+        show_when: i.show_when ?? "",
         key: i.id,
         section: i.section ?? "",
         type: i.type,
@@ -83,6 +93,17 @@ function Editor({ ctx }: { ctx: OrgContext }) {
 
   if (query.isPending) return <Spinner />;
   if (query.error || !query.data) return <p className="text-muted-foreground">{t("error.generic")}</p>;
+
+  const flowNodes: FlowNode[] = items.map((i) => ({
+    key: i.key,
+    label: i.label,
+    type: i.type,
+    required: i.required,
+    options: optList(i.options),
+    parentKey: i.parent && i.show_when ? i.parent : null,
+    showWhen: i.parent && i.show_when ? i.show_when : null,
+  }));
+  const yesNo = (v: string) => (v === "true" ? t("flow.yes") : v === "false" ? t("flow.no") : v);
 
   const update = (idx: number, patch: Partial<DraftItem>) =>
     setItems((list) => list.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
@@ -107,6 +128,8 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         allow_note: false,
         allow_photo: false,
         options: "",
+        parent: "",
+        show_when: "",
       },
     ]);
 
@@ -122,9 +145,12 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         .select()
         .single();
       if (error) throw error;
-      const rows = items
-        .filter((i) => i.label.trim())
+      const kept = items.filter((i) => i.label.trim());
+      const keyPos = new Map(kept.map((i, idx) => [i.key, idx]));
+      const rows = kept
         .map((i, position) => ({
+          parent_position: i.parent && i.show_when && keyPos.has(i.parent) ? keyPos.get(i.parent)! : null,
+          show_when: i.parent && i.show_when && keyPos.has(i.parent) ? i.show_when : null,
           version_id: ver.id,
           org_id: ctx.orgId,
           position,
@@ -136,7 +162,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
           allow_note: i.allow_note,
           allow_photo: i.allow_photo,
           options:
-            i.type === "dropdown" ? i.options.split("\n").map((o) => o.trim()).filter(Boolean) : [],
+            i.type === "dropdown" ? optList(i.options) : [],
         }));
       if (rows.length) {
         const { error: e2 } = await supabase.from("template_items").insert(rows);
@@ -176,11 +202,27 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         title={manage ? t("templates.editor") : meta.title}
         description={`${t("templates.version")} ${query.data.tpl.current_version}`}
         action={
-          manage ? (
-            <Button onClick={save} disabled={saving}>
-              {t("templates.saveNewVersion")}
-            </Button>
-          ) : null
+          <div className="flex gap-2">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Network className="size-4" /> {t("flow.show")}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>{t("flow.title")}</DialogTitle>
+                  <DialogDescription>{t("flow.desc")}</DialogDescription>
+                </DialogHeader>
+                <FlowTree nodes={flowNodes} />
+              </DialogContent>
+            </Dialog>
+            {manage && (
+              <Button onClick={save} disabled={saving}>
+                {t("templates.saveNewVersion")}
+              </Button>
+            )}
+          </div>
         }
       />
       {!manage && <p className="mb-4 text-sm text-muted-foreground">{t("templates.readOnly")}</p>}
@@ -252,6 +294,51 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                       onChange={(e) => update(idx, { options: e.target.value })}
                     />
                   )}
+                  {(() => {
+                    const parents = items.slice(0, idx).filter((p) => p.type === "checkbox" || p.type === "dropdown");
+                    const parent = parents.find((p) => p.key === item.parent);
+                    const vals = parent ? branchValues(parent.type, optList(parent.options)) : [];
+                    return (
+                      <div className="flex flex-wrap items-center gap-2 text-sm md:col-span-3">
+                        <GitBranch className="size-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">{t("flow.showIf")}</span>
+                        <select
+                          className={nativeSelect + " w-auto max-w-xs"}
+                          value={parent ? item.parent : ""}
+                          onChange={(e) => {
+                            const p = parents.find((x) => x.key === e.target.value);
+                            update(idx, {
+                              parent: e.target.value,
+                              show_when: p ? (branchValues(p.type, optList(p.options))[0] ?? "") : "",
+                            });
+                          }}
+                        >
+                          <option value="">{t("flow.always")}</option>
+                          {parents.map((p) => (
+                            <option key={p.key} value={p.key}>
+                              {items.indexOf(p) + 1}. {p.label || "—"}
+                            </option>
+                          ))}
+                        </select>
+                        {parent && (
+                          <>
+                            <span className="text-muted-foreground">{t("flow.answer")}</span>
+                            <select
+                              className={nativeSelect + " w-auto"}
+                              value={item.show_when}
+                              onChange={(e) => update(idx, { show_when: e.target.value })}
+                            >
+                              {vals.map((v) => (
+                                <option key={v} value={v}>
+                                  {yesNo(v)}
+                                </option>
+                              ))}
+                            </select>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="flex flex-wrap items-center gap-4 text-sm md:col-span-3">
                     {(
                       [
