@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowUp, GitBranch, Network, Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FlowTree } from "@/components/FlowTree";
@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
 type ItemType = Database["public"]["Enums"]["item_type"];
 type DraftItem = {
@@ -68,6 +69,23 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   const [meta, setMeta] = useState({ title: "", description: "", category: "" });
   const [items, setItems] = useState<DraftItem[]>([]);
   const [saving, setSaving] = useState(false);
+  const [flowOpen, setFlowOpen] = useState(false);
+  const [highlightKey, setHighlightKey] = useState<string | null>(null);
+  const itemRefs = useRef(new Map<string, HTMLLIElement>());
+
+  const jumpToItem = (key: string) => {
+    setFlowOpen(false);
+    setHighlightKey(key);
+    requestAnimationFrame(() => {
+      itemRefs.current.get(key)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  };
+
+  useEffect(() => {
+    if (!highlightKey) return;
+    const timer = setTimeout(() => setHighlightKey(null), 2500);
+    return () => clearTimeout(timer);
+  }, [highlightKey]);
 
   useEffect(() => {
     if (!query.data) return;
@@ -203,7 +221,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         description={`${t("templates.version")} ${query.data.tpl.current_version}`}
         action={
           <div className="flex gap-2">
-            <Dialog>
+            <Dialog open={flowOpen} onOpenChange={setFlowOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline">
                   <Network className="size-4" /> {t("flow.show")}
@@ -214,7 +232,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                   <DialogTitle>{t("flow.title")}</DialogTitle>
                   <DialogDescription>{t("flow.desc")}</DialogDescription>
                 </DialogHeader>
-                <FlowTree nodes={flowNodes} />
+                <FlowTree nodes={flowNodes} onSelect={jumpToItem} />
               </DialogContent>
             </Dialog>
             {manage && (
@@ -253,7 +271,17 @@ function Editor({ ctx }: { ctx: OrgContext }) {
 
         <ol className="space-y-3">
           {items.map((item, idx) => (
-            <li key={item.key} className="rounded-xl border bg-card p-4 shadow-soft">
+            <li
+              key={item.key}
+              ref={(el) => {
+                if (el) itemRefs.current.set(item.key, el);
+                else itemRefs.current.delete(item.key);
+              }}
+              className={cn(
+                "rounded-xl border bg-card p-4 shadow-soft transition-all",
+                highlightKey === item.key && "border-primary ring-2 ring-primary/40",
+              )}
+            >
               <div className="flex items-start gap-3">
                 <span className="mt-2 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
                   {idx + 1}
