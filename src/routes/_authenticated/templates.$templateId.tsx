@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
 type ItemType = Database["public"]["Enums"]["item_type"];
 type DraftItem = {
@@ -270,7 +271,17 @@ function Editor({ ctx }: { ctx: OrgContext }) {
 
         <ol className="space-y-3">
           {items.map((item, idx) => (
-            <li key={item.key} className="rounded-xl border bg-card p-4 shadow-soft">
+            <li
+              key={item.key}
+              ref={(el) => {
+                if (el) itemRefs.current.set(item.key, el);
+                else itemRefs.current.delete(item.key);
+              }}
+              className={cn(
+                "rounded-xl border bg-card p-4 shadow-soft transition-all",
+                highlightKey === item.key && "border-primary ring-2 ring-primary/40",
+              )}
+            >
               <div className="flex items-start gap-3">
                 <span className="mt-2 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
                   {idx + 1}
