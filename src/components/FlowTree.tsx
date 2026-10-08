@@ -45,7 +45,16 @@ function NodeView({ node, all, onSelect }: { node: FlowNode; all: FlowNode[]; on
   return (
     <li className="relative py-1.5">
       <span className="absolute -left-[27px] top-4 size-3 rounded-full border-2 border-primary bg-background" />
-      <div className="rounded-lg border bg-card px-3 py-2 shadow-soft">
+      <div
+        className={cn(
+          "rounded-lg border bg-card px-3 py-2 shadow-soft",
+          onSelect && "cursor-pointer transition-colors hover:border-primary hover:bg-primary/5",
+        )}
+        onClick={() => onSelect?.(node.key)}
+        role={onSelect ? "button" : undefined}
+        tabIndex={onSelect ? 0 : undefined}
+        onKeyDown={onSelect ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(node.key); } } : undefined}
+      >
         <p className="text-sm font-medium">
           {node.label || "—"}
           {node.required && <span className="ml-1 text-destructive">*</span>}
@@ -68,7 +77,7 @@ function NodeView({ node, all, onSelect }: { node: FlowNode; all: FlowNode[]; on
                   {label(b.v)}
                 </span>
               </div>
-              <Chain nodes={b.items} all={all} />
+              <Chain nodes={b.items} all={all} onSelect={onSelect} />
             </div>
           ))}
         </div>
