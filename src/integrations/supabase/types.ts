@@ -298,9 +298,11 @@ export type Database = {
           label: string
           options: Json
           org_id: string
+          parent_position: number | null
           position: number
           required: boolean
           section: string | null
+          show_when: string | null
           type: Database["public"]["Enums"]["item_type"]
           version_id: string
         }
@@ -312,9 +314,11 @@ export type Database = {
           label: string
           options?: Json
           org_id: string
+          parent_position?: number | null
           position?: number
           required?: boolean
           section?: string | null
+          show_when?: string | null
           type?: Database["public"]["Enums"]["item_type"]
           version_id: string
         }
@@ -326,9 +330,11 @@ export type Database = {
           label?: string
           options?: Json
           org_id?: string
+          parent_position?: number | null
           position?: number
           required?: boolean
           section?: string | null
+          show_when?: string | null
           type?: Database["public"]["Enums"]["item_type"]
           version_id?: string
         }
