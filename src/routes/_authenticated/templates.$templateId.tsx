@@ -285,8 +285,22 @@ function Editor({ ctx }: { ctx: OrgContext }) {
           </div>
         )}
 
+        {focusItem && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
+            <GitBranch className="size-4 text-primary" />
+            <span>
+              {t("flow.branchFocus")} <strong>{focusItem.label || "—"}</strong>
+            </span>
+            <Button type="button" size="sm" variant="outline" className="ml-auto" onClick={() => setFocusKey(null)}>
+              {t("flow.showAll")}
+            </Button>
+          </div>
+        )}
+
         <ol className="space-y-3">
-          {items.map((item, idx) => (
+          {shownItems.map((item) => {
+            const idx = items.findIndex((i) => i.key === item.key);
+            return (
             <li
               key={item.key}
               ref={(el) => {
