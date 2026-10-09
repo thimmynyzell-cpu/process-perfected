@@ -124,6 +124,21 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   }));
   const yesNo = (v: string) => (v === "true" ? t("flow.yes") : v === "false" ? t("flow.no") : v);
 
+  // Branch focus: show only the questions that live under the focused question's branch.
+  const branchKeys = (() => {
+    if (!focusKey) return null;
+    const byKey = new Map(items.map((i) => [i.key, i]));
+    const inBranch = (key: string, depth = 0): boolean => {
+      if (key === focusKey) return true;
+      if (depth > 50) return false;
+      const parent = byKey.get(key)?.parent;
+      return !!parent && inBranch(parent, depth + 1);
+    };
+    return new Set(items.filter((i) => inBranch(i.key)).map((i) => i.key));
+  })();
+  const focusItem = focusKey ? items.find((i) => i.key === focusKey) : undefined;
+  const shownItems = branchKeys ? items.filter((i) => branchKeys.has(i.key)) : items;
+
   const update = (idx: number, patch: Partial<DraftItem>) =>
     setItems((list) => list.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   const move = (idx: number, dir: -1 | 1) =>
