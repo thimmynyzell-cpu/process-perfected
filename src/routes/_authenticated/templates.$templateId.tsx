@@ -71,6 +71,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   const [saving, setSaving] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
   const [highlightKey, setHighlightKey] = useState<string | null>(null);
+  const [focusKey, setFocusKey] = useState<string | null>(null);
   const itemRefs = useRef(new Map<string, HTMLLIElement>());
 
   const jumpToItem = (key: string) => {
