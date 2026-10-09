@@ -414,12 +414,28 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                 </div>
                 {manage && (
                   <div className="flex flex-col gap-1">
-                    <Button type="button" size="icon" variant="ghost" aria-label="Upp" onClick={() => move(idx, -1)}>
-                      <ArrowUp className="size-4" />
-                    </Button>
-                    <Button type="button" size="icon" variant="ghost" aria-label="Ner" onClick={() => move(idx, 1)}>
-                      <ArrowDown className="size-4" />
-                    </Button>
+                    {(item.type === "checkbox" || item.type === "dropdown") && focusKey !== item.key && (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        title={t("flow.enterBranch")}
+                        aria-label={t("flow.enterBranch")}
+                        onClick={() => setFocusKey(item.key)}
+                      >
+                        <GitBranch className="size-4 text-primary" />
+                      </Button>
+                    )}
+                    {!focusKey && (
+                      <>
+                        <Button type="button" size="icon" variant="ghost" aria-label="Upp" onClick={() => move(idx, -1)}>
+                          <ArrowUp className="size-4" />
+                        </Button>
+                        <Button type="button" size="icon" variant="ghost" aria-label="Ner" onClick={() => move(idx, 1)}>
+                          <ArrowDown className="size-4" />
+                        </Button>
+                      </>
+                    )}
                     <Button
                       type="button"
                       size="icon"
