@@ -15,6 +15,7 @@ export function downloadCsv(filename: string, rows: (string | number | null)[][]
 
 export function formatAnswer(value: unknown): string {
   if (value === null || value === undefined || value === "") return "";
+  if (Array.isArray(value)) return value.join(", ");
   if (typeof value === "boolean") return value ? "Ja" : "Nej";
   return String(value);
 }

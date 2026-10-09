@@ -26,7 +26,7 @@ export const Route = createFileRoute("/_authenticated/runs/$runId")({
 
 function isFilled(item: Item, a?: Answer) {
   const v = a?.value;
-  if (item.type === "checkbox") return v === true;
+  if (item.type === "checkbox") return Array.isArray(v) ? v.length > 0 : v === true;
   return v !== null && v !== undefined && String(v).trim() !== "";
 }
 
@@ -83,7 +83,7 @@ function RunView({ ctx }: { ctx: OrgContext }) {
       label: i.label,
       type: i.type,
       required: i.required,
-      options: [],
+      options: Array.isArray(i.options) ? (i.options as string[]) : [],
       parentKey: i.parent_position != null ? (posId.get(i.parent_position) ?? null) : null,
       showWhen: i.show_when,
     })),
@@ -183,7 +183,32 @@ function RunView({ ctx }: { ctx: OrgContext }) {
                 const ok = isFilled(item, a);
                 return (
                   <li key={item.id} className="space-y-3 p-4">
-                    {item.type === "checkbox" ? (
+                    {item.type === "checkbox" && Array.isArray(item.options) && item.options.length > 0 ? (
+                      <>
+                        <ItemLabel item={item} ok={ok} />
+                        <div className="space-y-2 pl-1">
+                          {(item.options as string[]).map((o) => {
+                            const sel = Array.isArray(a.value) ? (a.value as string[]) : [];
+                            return (
+                              <label key={o} className="flex cursor-pointer items-center gap-3 text-sm">
+                                <Checkbox
+                                  className="size-5"
+                                  disabled={done}
+                                  checked={sel.includes(o)}
+                                  onCheckedChange={(v) =>
+                                    persist(item.id, {
+                                      ...a,
+                                      value: v === true ? [...sel.filter((x) => x !== o), o] : sel.filter((x) => x !== o),
+                                    })
+                                  }
+                                />
+                                {o}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </>
+                    ) : item.type === "checkbox" ? (
                       <label className="flex cursor-pointer items-start gap-3">
                         <Checkbox
                           className="mt-0.5 size-6"
