@@ -196,7 +196,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
           allow_note: i.allow_note,
           allow_photo: i.allow_photo,
           options:
-            i.type === "dropdown" ? optList(i.options) : [],
+            i.type === "dropdown" || i.type === "checkbox" ? optList(i.options) : [],
         }));
       if (rows.length) {
         const { error: e2 } = await supabase.from("template_items").insert(rows);
@@ -344,10 +344,10 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                     value={item.help_text}
                     onChange={(e) => update(idx, { help_text: e.target.value })}
                   />
-                  {item.type === "dropdown" && (
+                  {(item.type === "dropdown" || item.type === "checkbox") && (
                     <Textarea
                       className="md:col-span-3"
-                      placeholder={t("templates.options")}
+                      placeholder={item.type === "checkbox" ? t("templates.checkOptions") : t("templates.options")}
                       value={item.options}
                       onChange={(e) => update(idx, { options: e.target.value })}
                     />

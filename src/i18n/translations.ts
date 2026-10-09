@@ -85,6 +85,7 @@ export const translations = {
     "templates.allowNote": "Anteckning",
     "templates.allowPhoto": "Foto",
     "templates.options": "Alternativ (ett per rad)",
+    "templates.checkOptions": "Kryssrutor (en per rad) — lämna tomt för en enkel ja/nej-ruta",
     "templates.saveNewVersion": "Spara som ny version",
     "templates.versionNote":
       "När du sparar skapas en ny version. Pågående körningar behåller sin version.",
@@ -290,6 +291,7 @@ export const translations = {
     "templates.allowNote": "Note",
     "templates.allowPhoto": "Photo",
     "templates.options": "Options (one per line)",
+    "templates.checkOptions": "Checkboxes (one per line) — leave empty for a single yes/no box",
     "templates.saveNewVersion": "Save as new version",
     "templates.versionNote":
       "Saving creates a new version. Runs in progress keep their version.",
