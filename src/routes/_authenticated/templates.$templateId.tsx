@@ -71,6 +71,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   const [saving, setSaving] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
   const [highlightKey, setHighlightKey] = useState<string | null>(null);
+  const [focusKey, setFocusKey] = useState<string | null>(null);
   const itemRefs = useRef(new Map<string, HTMLLIElement>());
 
   const jumpToItem = (key: string) => {
@@ -122,6 +123,21 @@ function Editor({ ctx }: { ctx: OrgContext }) {
     showWhen: i.parent && i.show_when ? i.show_when : null,
   }));
   const yesNo = (v: string) => (v === "true" ? t("flow.yes") : v === "false" ? t("flow.no") : v);
+
+  // Branch focus: show only the questions that live under the focused question's branch.
+  const branchKeys = (() => {
+    if (!focusKey) return null;
+    const byKey = new Map(items.map((i) => [i.key, i]));
+    const inBranch = (key: string, depth = 0): boolean => {
+      if (key === focusKey) return true;
+      if (depth > 50) return false;
+      const parent = byKey.get(key)?.parent;
+      return !!parent && inBranch(parent, depth + 1);
+    };
+    return new Set(items.filter((i) => inBranch(i.key)).map((i) => i.key));
+  })();
+  const focusItem = focusKey ? items.find((i) => i.key === focusKey) : undefined;
+  const shownItems = branchKeys ? items.filter((i) => branchKeys.has(i.key)) : items;
 
   const update = (idx: number, patch: Partial<DraftItem>) =>
     setItems((list) => list.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
@@ -269,8 +285,22 @@ function Editor({ ctx }: { ctx: OrgContext }) {
           </div>
         )}
 
+        {focusItem && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
+            <GitBranch className="size-4 text-primary" />
+            <span>
+              {t("flow.branchFocus")} <strong>{focusItem.label || "—"}</strong>
+            </span>
+            <Button type="button" size="sm" variant="outline" className="ml-auto" onClick={() => setFocusKey(null)}>
+              {t("flow.showAll")}
+            </Button>
+          </div>
+        )}
+
         <ol className="space-y-3">
-          {items.map((item, idx) => (
+          {shownItems.map((item) => {
+            const idx = items.findIndex((i) => i.key === item.key);
+            return (
             <li
               key={item.key}
               ref={(el) => {
@@ -384,12 +414,28 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                 </div>
                 {manage && (
                   <div className="flex flex-col gap-1">
-                    <Button type="button" size="icon" variant="ghost" aria-label="Upp" onClick={() => move(idx, -1)}>
-                      <ArrowUp className="size-4" />
-                    </Button>
-                    <Button type="button" size="icon" variant="ghost" aria-label="Ner" onClick={() => move(idx, 1)}>
-                      <ArrowDown className="size-4" />
-                    </Button>
+                    {(item.type === "checkbox" || item.type === "dropdown") && focusKey !== item.key && (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        title={t("flow.enterBranch")}
+                        aria-label={t("flow.enterBranch")}
+                        onClick={() => setFocusKey(item.key)}
+                      >
+                        <GitBranch className="size-4 text-primary" />
+                      </Button>
+                    )}
+                    {!focusKey && (
+                      <>
+                        <Button type="button" size="icon" variant="ghost" aria-label="Upp" onClick={() => move(idx, -1)}>
+                          <ArrowUp className="size-4" />
+                        </Button>
+                        <Button type="button" size="icon" variant="ghost" aria-label="Ner" onClick={() => move(idx, 1)}>
+                          <ArrowDown className="size-4" />
+                        </Button>
+                      </>
+                    )}
                     <Button
                       type="button"
                       size="icon"
@@ -403,7 +449,8 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                 )}
               </div>
             </li>
-          ))}
+            );
+          })}
         </ol>
 
         {manage && (
