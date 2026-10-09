@@ -433,7 +433,8 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                 )}
               </div>
             </li>
-          ))}
+            );
+          })}
         </ol>
 
         {manage && (
