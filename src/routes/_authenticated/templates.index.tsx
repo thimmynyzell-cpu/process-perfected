@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Archive, Copy, Plus, RotateCcw } from "lucide-react";
+import { Archive, Copy, Pencil, Plus, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useT } from "@/i18n";
@@ -171,6 +171,11 @@ function Templates({ ctx }: { ctx: OrgContext }) {
                 )}
                 {manage && (
                   <>
+                    <Button asChild size="sm" variant="outline">
+                      <Link to="/templates/$templateId" params={{ templateId: tpl.id }}>
+                        <Pencil className="size-4" /> {t("common.edit")}
+                      </Link>
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={() => duplicate(tpl.id)}>
                       <Copy className="size-4" /> {t("common.duplicate")}
                     </Button>
