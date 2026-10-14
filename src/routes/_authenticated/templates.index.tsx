@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Archive, Copy, Pencil, Plus, RotateCcw } from "lucide-react";
+import { Archive, Copy, Pencil, Plus, RotateCcw, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useT } from "@/i18n";
@@ -15,6 +15,19 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+const DELETE_GRACE_DAYS = 10;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const Route = createFileRoute("/_authenticated/templates/")({
   head: () => ({ meta: [{ title: "Mallar — Checklista" }] }),
@@ -28,18 +41,22 @@ function Templates({ ctx }: { ctx: OrgContext }) {
   const [tab, setTab] = useState<"active" | "archived">("active");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", category: "" });
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const manage = canManage(ctx.role);
 
   const templates = useQuery({
     queryKey: ["templates", ctx.orgId],
     queryFn: async () => {
+      // Permanently remove templates whose deletion grace period has passed.
+      await supabase.rpc("purge_expired_templates");
       const { data, error } = await supabase
         .from("templates")
         .select("*")
         .eq("org_id", ctx.orgId)
         .order("updated_at", { ascending: false });
       if (error) throw error;
-      return data;
+      const now = Date.now();
+      return data.filter((x) => !x.delete_after || new Date(x.delete_after).getTime() > now);
     },
   });
 
@@ -106,10 +123,38 @@ function Templates({ ctx }: { ctx: OrgContext }) {
 
   async function setStatus(id: string, status: "active" | "archived") {
     if (status === "active" && atLimit) { toast.error(t("limit.templates", { max: max ?? 0 })); return; }
-    const { error } = await supabase.from("templates").update({ status }).eq("id", id);
+    const { error } = await supabase
+      .from("templates")
+      .update(status === "active" ? { status, delete_after: null } : { status })
+      .eq("id", id);
     if (error) { toast.error(error.message); return; }
     if (status === "archived") await logAudit(ctx.orgId, ctx.userId, "template.archived", "template", id);
     qc.invalidateQueries({ queryKey: ["templates", ctx.orgId] });
+  }
+
+  async function scheduleDelete(id: string) {
+    const deleteAfter = new Date(Date.now() + DELETE_GRACE_DAYS * DAY_MS).toISOString();
+    const { error } = await supabase
+      .from("templates")
+      .update({ status: "archived", delete_after: deleteAfter })
+      .eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    await logAudit(ctx.orgId, ctx.userId, "template.delete_scheduled", "template", id, { delete_after: deleteAfter });
+    toast.success(t("templates.deleteScheduled"));
+    qc.invalidateQueries({ queryKey: ["templates", ctx.orgId] });
+  }
+
+  async function undoDelete(id: string) {
+    const { error } = await supabase.from("templates").update({ delete_after: null }).eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    await logAudit(ctx.orgId, ctx.userId, "template.delete_undone", "template", id);
+    toast.success(t("templates.deleteUndone"));
+    qc.invalidateQueries({ queryKey: ["templates", ctx.orgId] });
+  }
+
+  function deleteLabel(deleteAfter: string) {
+    const days = Math.ceil((new Date(deleteAfter).getTime() - Date.now()) / DAY_MS);
+    return days <= 1 ? t("templates.deleteToday") : t("templates.deletePending", { days });
   }
 
   return (
@@ -160,6 +205,11 @@ function Templates({ ctx }: { ctx: OrgContext }) {
                 <span className="shrink-0 text-xs text-muted-foreground">v{tpl.current_version}</span>
               </div>
               {tpl.category && <p className="mt-1 text-xs font-medium text-primary">{tpl.category}</p>}
+              {tpl.delete_after && (
+                <p className="mt-2 inline-flex w-fit items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+                  <Trash2 className="size-3" /> {deleteLabel(tpl.delete_after)}
+                </p>
+              )}
               <p className="mt-2 line-clamp-2 flex-1 text-sm text-muted-foreground">{tpl.description}</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 {tpl.status === "active" && (
@@ -188,6 +238,20 @@ function Templates({ ctx }: { ctx: OrgContext }) {
                         <RotateCcw className="size-4" /> {t("common.restore")}
                       </Button>
                     )}
+                    {tpl.delete_after ? (
+                      <Button size="sm" variant="ghost" onClick={() => undoDelete(tpl.id)}>
+                        <Undo2 className="size-4" /> {t("templates.undoDelete")}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => setDeleteId(tpl.id)}
+                      >
+                        <Trash2 className="size-4" /> {t("common.delete")}
+                      </Button>
+                    )}
                   </>
                 )}
               </div>
@@ -195,6 +259,27 @@ function Templates({ ctx }: { ctx: OrgContext }) {
           ))}
         </div>
       )}
+
+      <AlertDialog open={deleteId !== null} onOpenChange={(o) => !o && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("templates.deleteTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("templates.deleteBody")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteId) scheduleDelete(deleteId);
+                setDeleteId(null);
+              }}
+            >
+              {t("templates.deleteConfirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>

@@ -403,6 +403,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           current_version: number
+          delete_after: string | null
           description: string | null
           id: string
           org_id: string
@@ -415,6 +416,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           current_version?: number
+          delete_after?: string | null
           description?: string | null
           id?: string
           org_id: string
@@ -427,6 +429,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           current_version?: number
+          delete_after?: string | null
           description?: string | null
           id?: string
           org_id?: string
@@ -464,6 +467,7 @@ export type Database = {
         Returns: boolean
       }
       is_org_member: { Args: { _org: string }; Returns: boolean }
+      purge_expired_templates: { Args: never; Returns: number }
       seed_demo_templates: {
         Args: { _org: string; _user: string }
         Returns: undefined
