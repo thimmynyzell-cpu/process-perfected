@@ -219,6 +219,9 @@ function Editor({ ctx }: { ctx: OrgContext }) {
       if (error) throw error;
       pending = ver.id;
       const kept = items.filter((i) => i.label.trim());
+      // Questions without text are skipped; say so if they had other content.
+      const skipped = items.filter((i) => !i.label.trim() && (optList(i.options).length || i.help_text.trim())).length;
+      if (skipped) toast.warning(t("templates.skippedNoText", { count: skipped }));
       const keyPos = new Map(kept.map((i, idx) => [i.key, idx]));
       const rows = kept
         .map((i, position) => ({
@@ -261,8 +264,14 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         }
         if (e2) throw e2;
         if (dropped) toast.warning(t("flow.jumpsNotSaved"));
+        // Row level security can drop rows without an error; confirm they landed.
+        const { count } = await supabase
+          .from("template_items")
+          .select("id", { count: "exact", head: true })
+          .eq("version_id", ver.id);
+        if (count !== rows.length) throw new Error(t("templates.saveItemsMissing", { saved: count ?? 0, total: rows.length }));
       }
-      const { error: e3 } = await supabase
+      const { data: updated, error: e3 } = await supabase
         .from("templates")
         .update({
           title: meta.title.trim(),
@@ -271,8 +280,11 @@ function Editor({ ctx }: { ctx: OrgContext }) {
           current_version: nextVersion,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", tpl.id);
+        .eq("id", tpl.id)
+        .select("id");
       if (e3) throw e3;
+      // An update blocked by row level security returns no rows and no error.
+      if (!updated?.length) throw new Error(t("templates.saveNotApplied"));
       pending = null;
       await logAudit(ctx.orgId, ctx.userId, "template.updated", "template", tpl.id, {
         title: meta.title,
