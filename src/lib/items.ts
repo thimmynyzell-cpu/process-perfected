@@ -32,3 +32,20 @@ export function pickItems<T extends ItemRow>(items: T[], keep: Set<string>): T[]
     return out;
   });
 }
+
+/** Moves the item with key `from` so it lands before (or after) the item with key `to`. */
+export function reorder<T extends { key: string }>(
+  list: T[],
+  from: string,
+  to: string,
+  after: boolean,
+): T[] {
+  if (from === to) return list;
+  const moving = list.find((i) => i.key === from);
+  if (!moving) return list;
+  const rest = list.filter((i) => i.key !== from);
+  const at = rest.findIndex((i) => i.key === to);
+  if (at < 0) return list;
+  rest.splice(after ? at + 1 : at, 0, moving);
+  return rest;
+}

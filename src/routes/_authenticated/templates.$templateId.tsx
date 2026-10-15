@@ -1,13 +1,25 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, CornerDownRight, GitBranch, Network, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  Copy,
+  CornerDownRight,
+  GitBranch,
+  GripVertical,
+  Network,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FlowTree } from "@/components/FlowTree";
 import { OptionRows } from "@/components/OptionRows";
 import { Hint } from "@/components/Hint";
 import { branchValues, jumpKeys, type FlowNode } from "@/lib/flow";
 import { LEVELS, type Level } from "@/lib/levels";
+import { reorder } from "@/lib/items";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -80,6 +92,11 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   const [highlightKey, setHighlightKey] = useState<string | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const itemRefs = useRef(new Map<string, HTMLLIElement>());
+  // Drag and drop: a card becomes draggable when pressed outside its form
+  // fields, so text in inputs can still be selected with the mouse.
+  const [dragArmed, setDragArmed] = useState<string | null>(null);
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [dropAt, setDropAt] = useState<{ key: string; after: boolean } | null>(null);
 
   const jumpToItem = (key: string) => {
     setFlowOpen(false);
@@ -159,6 +176,18 @@ function Editor({ ctx }: { ctx: OrgContext }) {
       [next[idx], next[target]] = [next[target]!, next[idx]!];
       return next;
     });
+  const duplicate = (idx: number) => {
+    const copy = { ...items[idx]!, key: crypto.randomUUID(), jumps: { ...items[idx]!.jumps }, levels: [...items[idx]!.levels] };
+    setItems((list) => [...list.slice(0, idx + 1), copy, ...list.slice(idx + 1)]);
+    jumpToItem(copy.key);
+  };
+
+  const endDrag = () => {
+    setDragArmed(null);
+    setDragKey(null);
+    setDropAt(null);
+  };
+
   const add = () =>
     setItems((list) => [
       ...list,
@@ -355,15 +384,55 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                 if (el) itemRefs.current.set(item.key, el);
                 else itemRefs.current.delete(item.key);
               }}
+              draggable={manage && !focusKey && dragArmed === item.key}
+              onPointerDown={(e) => {
+                const field = (e.target as HTMLElement).closest("input, textarea, select, button, label, [role=checkbox]");
+                setDragArmed(field ? null : item.key);
+              }}
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", item.key);
+                setDragKey(item.key);
+              }}
+              onDragOver={(e) => {
+                if (!dragKey) return;
+                e.preventDefault();
+                const box = e.currentTarget.getBoundingClientRect();
+                const after = e.clientY > box.top + box.height / 2;
+                if (dropAt?.key !== item.key || dropAt.after !== after) setDropAt({ key: item.key, after });
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragKey && dropAt) setItems((list) => reorder(list, dragKey, dropAt.key, dropAt.after));
+                endDrag();
+              }}
+              onDragEnd={endDrag}
               className={cn(
-                "rounded-xl border bg-card p-4 shadow-soft transition-all",
+                "relative rounded-xl border bg-card p-4 shadow-soft transition-all",
+                manage && !focusKey && "cursor-grab active:cursor-grabbing",
                 highlightKey === item.key && "border-primary ring-2 ring-primary/40",
+                dragKey === item.key && "opacity-40",
               )}
             >
+              {dropAt?.key === item.key && dragKey !== item.key && (
+                <span
+                  className={cn(
+                    "pointer-events-none absolute inset-x-2 h-1 rounded-full bg-primary",
+                    dropAt.after ? "-bottom-2.5" : "-top-2.5",
+                  )}
+                />
+              )}
               <div className="flex items-start gap-3">
-                <span className="mt-2 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-medium">
-                  {idx + 1}
-                </span>
+                <div className="mt-2 flex shrink-0 flex-col items-center gap-1">
+                  <span className="flex size-6 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                    {idx + 1}
+                  </span>
+                  {manage && !focusKey && (
+                    <Hint text={t("templates.dragHint")}>
+                      <GripVertical className="size-4 text-muted-foreground" />
+                    </Hint>
+                  )}
+                </div>
                 <div className="grid flex-1 gap-3 md:grid-cols-[1fr_10rem_10rem]">
                   <Input
                     className="md:col-span-2"
@@ -505,6 +574,17 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                         </Button>
                       </>
                     )}
+                    <Hint text={t("templates.duplicateItem")}>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        aria-label={t("templates.duplicateItem")}
+                        onClick={() => duplicate(idx)}
+                      >
+                        <Copy className="size-4" />
+                      </Button>
+                    </Hint>
                     <Button
                       type="button"
                       size="icon"

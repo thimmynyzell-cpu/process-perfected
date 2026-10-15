@@ -1,4 +1,4 @@
-import { pickItems } from "./items";
+import { pickItems, reorder } from "./items";
 
 const item = (id: string, position: number, extra = {}) => ({
   id,
@@ -34,5 +34,16 @@ describe("pickItems", () => {
     expect(out[0]!.jump_to).toEqual({});
     const { jump_to: _j, ...noJump } = item("x", 0);
     expect(pickItems([noJump], new Set(["x"]))[0]).not.toHaveProperty("jump_to");
+  });
+});
+
+describe("reorder", () => {
+  const list = ["a", "b", "c", "d"].map((key) => ({ key }));
+  const keys = (l: { key: string }[]) => l.map((i) => i.key).join("");
+  it("moves an item before or after another", () => {
+    expect(keys(reorder(list, "a", "c", false))).toBe("bacd");
+    expect(keys(reorder(list, "a", "c", true))).toBe("bcad");
+    expect(keys(reorder(list, "d", "a", false))).toBe("dabc");
+    expect(keys(reorder(list, "b", "b", true))).toBe("abcd");
   });
 });
