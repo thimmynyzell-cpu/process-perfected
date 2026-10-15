@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Circle, Plus, Trash2 } from "lucide-react";
+import { Circle, Lightbulb, Plus, Trash2, X } from "lucide-react";
 import { useT } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { takeTip, turnOffTips } from "@/lib/tips";
 
 // One row per checkbox or dropdown option, stored as newline-separated
 // options like before. Empty rows are dropped on save (see optList).
@@ -39,6 +40,14 @@ export function OptionRows({
     }
   }, [focusRow]);
 
+  // Index of the occasional tip shown above the rows, if any.
+  const [tip, setTip] = useState<number | null>(null);
+  useEffect(() => {
+    if (tip === null) return;
+    const timer = setTimeout(() => setTip(null), 12000);
+    return () => clearTimeout(timer);
+  }, [tip]);
+
   const set = (next: string[]) => {
     setRows(next);
     onChange(next.join("\n"));
@@ -49,7 +58,39 @@ export function OptionRows({
   };
 
   return (
-    <div className="space-y-2 md:col-span-3">
+    <div className="relative space-y-2 md:col-span-3">
+      {tip !== null && (
+        <div
+          role="status"
+          className="absolute bottom-full left-6 z-20 mb-2 w-80 max-w-[calc(100%-1.5rem)] rounded-lg border border-primary/30 bg-card p-3 text-sm shadow-lg animate-in fade-in-0 slide-in-from-bottom-1"
+        >
+          <div className="flex items-start gap-2">
+            <Lightbulb className="mt-0.5 size-4 shrink-0 text-primary" />
+            <p className="flex-1">{t(`templates.tip${tip}`)}</p>
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={t("common.close")}
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => setTip(null)}
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+          <button
+            type="button"
+            tabIndex={-1}
+            className="mt-1 pl-6 text-xs text-muted-foreground underline-offset-2 hover:underline"
+            onClick={() => {
+              turnOffTips();
+              setTip(null);
+            }}
+          >
+            {t("templates.tipOff")}
+          </button>
+          <span className="absolute -bottom-1.5 left-4 size-3 rotate-45 border-b border-r border-primary/30 bg-card" />
+        </div>
+      )}
       {rows.map((row, i) => (
         <div key={i} className="flex items-center gap-2">
           {kind === "checkbox" ? (
@@ -65,11 +106,19 @@ export function OptionRows({
               kind === "checkbox" ? "templates.checkboxPlaceholder" : "templates.optionPlaceholder",
             )}
             value={row}
+            onFocus={() => {
+              if (tip === null) {
+                const next = takeTip();
+                if (next !== null) setTip(next);
+              }
+            }}
             onChange={(e) => {
               set(rows.map((r, j) => (j === i ? e.target.value : r)));
               onRename?.(row.trim(), e.target.value.trim());
             }}
             onKeyDown={(e) => {
+              // The tip has done its job once the shortcut is used.
+              if (e.key === "Tab" || e.key === "Enter") setTip(null);
               if (e.key === "Enter") {
                 e.preventDefault();
                 add(i + 1);

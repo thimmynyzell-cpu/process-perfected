@@ -77,3 +77,15 @@ describe("OptionRows add button", () => {
     expect(document.activeElement).toBe(rows()[0]);
   });
 });
+
+describe("OptionRows tip", () => {
+  it("pops up a tip when a row is focused", async () => {
+    localStorage.clear();
+    (await import("@/lib/tips")).resetTipsForTest();
+    setup("Ett");
+    fireEvent.focus(rows()[0]!);
+    expect(screen.getByRole("status").textContent).toMatch(/Tab/);
+    fireEvent.click(screen.getByRole("button", { name: "Visa inte fler tips" }));
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+});
