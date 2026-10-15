@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowUp, CornerDownRight, GitBranch, Network, Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FlowTree } from "@/components/FlowTree";
-import { CheckboxOptions } from "@/components/CheckboxOptions";
+import { OptionRows } from "@/components/OptionRows";
 import { branchValues, jumpKeys, type FlowNode } from "@/lib/flow";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,7 +16,6 @@ import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
@@ -363,15 +362,22 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                     value={item.help_text}
                     onChange={(e) => update(idx, { help_text: e.target.value })}
                   />
-                  {item.type === "checkbox" && (
-                    <CheckboxOptions value={item.options} onChange={(options) => update(idx, { options })} />
-                  )}
-                  {item.type === "dropdown" && (
-                    <Textarea
-                      className="md:col-span-3"
-                      placeholder={t("templates.options")}
+                  {(item.type === "checkbox" || item.type === "dropdown") && (
+                    <OptionRows
+                      kind={item.type}
                       value={item.options}
-                      onChange={(e) => update(idx, { options: e.target.value })}
+                      onChange={(options) => update(idx, { options })}
+                      onRename={(from, to) => update(idx, { jumps: renameJump(item.jumps, from, to) })}
+                      extra={(option) =>
+                        option && idx < items.length - 1 ? (
+                          <JumpSelect
+                            value={item.jumps[option]}
+                            later={items.slice(idx + 1)}
+                            number={(key) => items.findIndex((x) => x.key === key) + 1}
+                            onChange={(key) => update(idx, { jumps: setJump(item.jumps, option, key) })}
+                          />
+                        ) : null
+                      }
                     />
                   )}
                   {(() => {
@@ -492,7 +498,52 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   );
 }
 
-// Per answer value, pick a later question to jump to; the ones in between are skipped.
+function setJump(jumps: Record<string, string>, value: string, key: string) {
+  const next = { ...jumps };
+  if (key) next[value] = key;
+  else delete next[value];
+  return next;
+}
+
+function renameJump(jumps: Record<string, string>, from: string, to: string) {
+  if (from === to || !jumps[from]) return jumps;
+  const { [from]: key, ...rest } = jumps;
+  return to ? { ...rest, [to]: key! } : rest;
+}
+
+// Picks a later question to jump to for one answer; the ones in between are skipped.
+function JumpSelect({
+  value,
+  later,
+  number,
+  onChange,
+}: {
+  value: string | undefined;
+  later: DraftItem[];
+  number: (key: string) => number;
+  onChange: (key: string) => void;
+}) {
+  const t = useT();
+  return (
+    <label className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground">
+      <CornerDownRight className="size-4 text-primary" aria-label={t("flow.goTo")} />
+      <select
+        className={nativeSelect + " w-auto max-w-[12rem]"}
+        value={value && later.some((x) => x.key === value) ? value : ""}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">{t("flow.nextQuestion")}</option>
+        {later.map((x) => (
+          <option key={x.key} value={x.key}>
+            {number(x.key)}. {x.label || "—"}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+// Jumps for a yes/no checkbox, which has no option rows to put them next to.
 function JumpEditor({
   item,
   later,
@@ -507,7 +558,7 @@ function JumpEditor({
   onChange: (jumps: Record<string, string>) => void;
 }) {
   const t = useT();
-  const values = branchValues(item.type, optList(item.options));
+  const values = item.type === "checkbox" && !optList(item.options).length ? ["true", "false"] : [];
   const hasJumps = Object.keys(item.jumps).length > 0;
   const [open, setOpen] = useState(hasJumps);
   if (!values.length || !later.length) return null;
@@ -532,23 +583,12 @@ function JumpEditor({
           <span className="text-muted-foreground">{t("flow.if")}</span>
           <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">{yesNo(v)}</span>
           <span className="text-muted-foreground">{t("flow.goTo")}</span>
-          <select
-            className={nativeSelect + " w-auto max-w-xs"}
-            value={item.jumps[v] && later.some((x) => x.key === item.jumps[v]) ? item.jumps[v] : ""}
-            onChange={(e) => {
-              const next = { ...item.jumps };
-              if (e.target.value) next[v] = e.target.value;
-              else delete next[v];
-              onChange(next);
-            }}
-          >
-            <option value="">{t("flow.nextQuestion")}</option>
-            {later.map((x) => (
-              <option key={x.key} value={x.key}>
-                {number(x.key)}. {x.label || "—"}
-              </option>
-            ))}
-          </select>
+          <JumpSelect
+            value={item.jumps[v]}
+            later={later}
+            number={number}
+            onChange={(key) => onChange(setJump(item.jumps, v, key))}
+          />
         </div>
       ))}
     </div>

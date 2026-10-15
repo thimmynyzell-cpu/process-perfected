@@ -1,18 +1,26 @@
-import { useEffect, useRef, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Circle, Plus, Trash2 } from "lucide-react";
 import { useT } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 
-// One row per checkbox, stored as newline-separated options like before.
-// Empty rows are dropped on save (see optList).
-export function CheckboxOptions({
+// One row per checkbox or dropdown option, stored as newline-separated
+// options like before. Empty rows are dropped on save (see optList).
+export function OptionRows({
+  kind,
   value,
   onChange,
+  onRename,
+  extra,
 }: {
+  kind: "checkbox" | "dropdown";
   value: string;
   onChange: (value: string) => void;
+  /** Called with trimmed old and new text when a row's text changes. */
+  onRename?: (from: string, to: string) => void;
+  /** Rendered at the end of each row, e.g. a jump target picker. */
+  extra?: (option: string) => ReactNode;
 }) {
   const t = useT();
   const rows = value === "" ? [] : value.split("\n");
@@ -36,14 +44,23 @@ export function CheckboxOptions({
     <div className="space-y-2 md:col-span-3">
       {rows.map((row, i) => (
         <div key={i} className="flex items-center gap-2">
-          <Checkbox disabled aria-hidden className="shrink-0" />
+          {kind === "checkbox" ? (
+            <Checkbox disabled aria-hidden className="shrink-0" />
+          ) : (
+            <Circle aria-hidden className="size-4 shrink-0 text-muted-foreground" />
+          )}
           <Input
             ref={(el) => {
               inputs.current[i] = el;
             }}
-            placeholder={t("templates.checkboxPlaceholder")}
+            placeholder={t(
+              kind === "checkbox" ? "templates.checkboxPlaceholder" : "templates.optionPlaceholder",
+            )}
             value={row}
-            onChange={(e) => set(rows.map((r, j) => (j === i ? e.target.value : r)))}
+            onChange={(e) => {
+              set(rows.map((r, j) => (j === i ? e.target.value : r)));
+              onRename?.(row.trim(), e.target.value.trim());
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -57,6 +74,7 @@ export function CheckboxOptions({
               }
             }}
           />
+          {extra?.(row.trim())}
           <Button
             type="button"
             size="icon"
@@ -71,9 +89,10 @@ export function CheckboxOptions({
       ))}
       <div className="flex flex-wrap items-center gap-3">
         <Button type="button" size="sm" variant="outline" onClick={() => add(rows.length)}>
-          <Plus className="size-4" /> {t("templates.addCheckbox")}
+          <Plus className="size-4" />{" "}
+          {t(kind === "checkbox" ? "templates.addCheckbox" : "templates.addOption")}
         </Button>
-        {rows.length === 0 && (
+        {kind === "checkbox" && rows.length === 0 && (
           <span className="text-xs text-muted-foreground">{t("templates.checkboxHint")}</span>
         )}
       </div>
