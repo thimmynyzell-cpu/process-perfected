@@ -97,6 +97,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          level: string
           org_id: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
@@ -104,6 +105,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          level?: string
           org_id: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id: string
@@ -111,6 +113,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          level?: string
           org_id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
@@ -295,7 +298,9 @@ export type Database = {
           allow_photo: boolean
           help_text: string | null
           id: string
+          jump_to: Json
           label: string
+          levels: string[]
           options: Json
           org_id: string
           parent_position: number | null
@@ -311,7 +316,9 @@ export type Database = {
           allow_photo?: boolean
           help_text?: string | null
           id?: string
+          jump_to?: Json
           label: string
+          levels?: string[]
           options?: Json
           org_id: string
           parent_position?: number | null
@@ -327,7 +334,9 @@ export type Database = {
           allow_photo?: boolean
           help_text?: string | null
           id?: string
+          jump_to?: Json
           label?: string
+          levels?: string[]
           options?: Json
           org_id?: string
           parent_position?: number | null
@@ -403,8 +412,10 @@ export type Database = {
           created_at: string
           created_by: string | null
           current_version: number
+          delete_after: string | null
           description: string | null
           id: string
+          is_base: boolean
           org_id: string
           status: Database["public"]["Enums"]["template_status"]
           title: string
@@ -415,8 +426,10 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           current_version?: number
+          delete_after?: string | null
           description?: string | null
           id?: string
+          is_base?: boolean
           org_id: string
           status?: Database["public"]["Enums"]["template_status"]
           title: string
@@ -427,8 +440,10 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           current_version?: number
+          delete_after?: string | null
           description?: string | null
           id?: string
+          is_base?: boolean
           org_id?: string
           status?: Database["public"]["Enums"]["template_status"]
           title?: string
@@ -464,6 +479,7 @@ export type Database = {
         Returns: boolean
       }
       is_org_member: { Args: { _org: string }; Returns: boolean }
+      purge_expired_templates: { Args: never; Returns: number }
       seed_demo_templates: {
         Args: { _org: string; _user: string }
         Returns: undefined
