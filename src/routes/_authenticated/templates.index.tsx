@@ -7,6 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useT } from "@/i18n";
 import { canManage, logAudit } from "@/lib/auth";
 import { PLANS } from "@/lib/plans";
+import { pickItems } from "@/lib/items";
+import { Checkbox } from "@/components/ui/checkbox";
 import { OrgPage, Spinner, EmptyState, type OrgContext } from "@/components/OrgPage";
 import { PageHeader } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
@@ -41,6 +43,8 @@ function Templates({ ctx }: { ctx: OrgContext }) {
   const [tab, setTab] = useState<"active" | "archived" | "trash">("active");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", category: "" });
+  // Base checklist questions to include in the new checklist.
+  const [baseKeep, setBaseKeep] = useState<Set<string>>(new Set());
   // Checklists awaiting confirmation for permanent deletion.
   const [purgeIds, setPurgeIds] = useState<string[] | null>(null);
   const manage = canManage(ctx.role);
@@ -103,6 +107,11 @@ function Templates({ ctx }: { ctx: OrgContext }) {
     navigate({ to: "/templates/$templateId", params: { templateId: tpl.id } });
   }
 
+  function openCreate() {
+    setBaseKeep(new Set((baseItems.data ?? []).map((i) => i.id)));
+    setOpen(true);
+  }
+
   async function create(e: React.FormEvent) {
     e.preventDefault();
     const { data: tpl, error } = await supabase
@@ -116,9 +125,9 @@ function Templates({ ctx }: { ctx: OrgContext }) {
       .insert({ template_id: tpl.id, org_id: ctx.orgId, version: 1, created_by: ctx.userId })
       .select()
       .single();
-    // Start every new checklist with the questions from the base checklist.
-    if (base && ver) {
-      const items = await latestItems(base.id);
+    // Start the new checklist with the chosen questions from the base checklist.
+    if (base && ver && baseKeep.size) {
+      const items = pickItems(await latestItems(base.id), baseKeep);
       if (items.length) {
         await supabase.from("template_items").insert(
           items.map(({ id: _id, version_id: _v, ...rest }) => ({ ...rest, version_id: ver.id })),
@@ -221,7 +230,7 @@ function Templates({ ctx }: { ctx: OrgContext }) {
         title={t("templates.title")}
         action={
           manage ? (
-            <Button onClick={() => (atLimit ? toast.error(t("limit.templates", { max: max ?? 0 })) : setOpen(true))}>
+            <Button onClick={() => (atLimit ? toast.error(t("limit.templates", { max: max ?? 0 })) : openCreate())}>
               <Plus className="size-4" /> {t("templates.new")}
             </Button>
           ) : null
@@ -443,6 +452,13 @@ function Templates({ ctx }: { ctx: OrgContext }) {
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
             </div>
+            {base && !!baseItems.data?.length && (
+              <BasePicker
+                items={baseItems.data}
+                keep={baseKeep}
+                onChange={setBaseKeep}
+              />
+            )}
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                 {t("common.cancel")}
@@ -453,5 +469,47 @@ function Templates({ ctx }: { ctx: OrgContext }) {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+// Choose which base checklist questions a new checklist starts with.
+function BasePicker({
+  items,
+  keep,
+  onChange,
+}: {
+  items: { id: string; label: string; position: number }[];
+  keep: Set<string>;
+  onChange: (keep: Set<string>) => void;
+}) {
+  const t = useT();
+  const sorted = [...items].sort((a, b) => a.position - b.position);
+  const allOn = keep.size === items.length;
+  const toggle = (id: string, on: boolean) => {
+    const next = new Set(keep);
+    if (on) next.add(id);
+    else next.delete(id);
+    onChange(next);
+  };
+  return (
+    <div className="space-y-2 rounded-lg border p-3">
+      <label className="flex items-center gap-2 text-sm font-medium">
+        <Checkbox
+          checked={allOn ? true : keep.size ? "indeterminate" : false}
+          onCheckedChange={() => onChange(allOn ? new Set() : new Set(items.map((i) => i.id)))}
+        />
+        {t("templates.baseInclude", { count: keep.size, total: items.length })}
+      </label>
+      <ul className="max-h-48 space-y-1.5 overflow-y-auto pl-6">
+        {sorted.map((i) => (
+          <li key={i.id}>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox checked={keep.has(i.id)} onCheckedChange={(v) => toggle(i.id, v === true)} />
+              {i.label}
+            </label>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

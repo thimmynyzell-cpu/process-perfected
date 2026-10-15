@@ -232,6 +232,7 @@ export const translations = {
     "templates.baseDesc": "Frågorna i grundchecklistan läggs automatiskt in i varje ny checklista du skapar.",
     "templates.baseItems": "{count} frågor",
     "templates.baseCreate": "Skapa grundchecklista",
+    "templates.baseInclude": "Frågor från grundchecklistan ({count} av {total})",
     "templates.baseEditorNote":
       "Det här är grundchecklistan. Ändringar här påverkar nya checklistor som skapas framöver, inte befintliga.",
     "history.template": "Checklista",
@@ -469,6 +470,7 @@ export const translations = {
     "templates.baseDesc": "The questions in the base checklist are automatically added to every new checklist you create.",
     "templates.baseItems": "{count} questions",
     "templates.baseCreate": "Create base checklist",
+    "templates.baseInclude": "Questions from the base checklist ({count} of {total})",
     "templates.baseEditorNote":
       "This is the base checklist. Changes here apply to checklists created from now on, not existing ones.",
     "history.template": "Checklist",
