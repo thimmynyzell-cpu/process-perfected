@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowLeft, ArrowUp, GitBranch, Network, Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FlowTree } from "@/components/FlowTree";
+import { CheckboxOptions } from "@/components/CheckboxOptions";
 import { branchValues, type FlowNode } from "@/lib/flow";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,7 +18,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 
 type ItemType = Database["public"]["Enums"]["item_type"];
@@ -469,65 +469,5 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         )}
       </fieldset>
     </>
-  );
-}
-
-// One row per checkbox, stored as newline-separated options like before.
-function CheckboxOptions({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const t = useT();
-  const rows = value === "" ? [] : value.split("\n");
-  const inputs = useRef<(HTMLInputElement | null)[]>([]);
-  const [focusRow, setFocusRow] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (focusRow !== null) {
-      inputs.current[focusRow]?.focus();
-      setFocusRow(null);
-    }
-  }, [focusRow]);
-
-  const set = (next: string[]) => onChange(next.join("\n"));
-  const add = (at: number) => {
-    set([...rows.slice(0, at), "", ...rows.slice(at)]);
-    setFocusRow(at);
-  };
-
-  return (
-    <div className="space-y-2 md:col-span-3">
-      {rows.map((row, i) => (
-        <div key={i} className="flex items-center gap-2">
-          <Checkbox disabled aria-hidden className="shrink-0" />
-          <Input
-            ref={(el) => {
-              inputs.current[i] = el;
-            }}
-            placeholder={t("templates.checkboxPlaceholder")}
-            value={row}
-            onChange={(e) => set(rows.map((r, j) => (j === i ? e.target.value : r)))}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                add(i + 1);
-              }
-            }}
-          />
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            aria-label={t("common.delete")}
-            onClick={() => set(rows.filter((_, j) => j !== i))}
-          >
-            <Trash2 className="size-4" />
-          </Button>
-        </div>
-      ))}
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="button" size="sm" variant="outline" onClick={() => add(rows.length)}>
-          <Plus className="size-4" /> {t("templates.addCheckbox")}
-        </Button>
-        {rows.length === 0 && <span className="text-xs text-muted-foreground">{t("templates.checkboxHint")}</span>}
-      </div>
-    </div>
   );
 }
