@@ -37,7 +37,7 @@ type DraftItem = {
 const optList = (s: string) => s.split("\n").map((o) => o.trim()).filter(Boolean);
 
 export const Route = createFileRoute("/_authenticated/templates/$templateId")({
-  head: () => ({ meta: [{ title: "Redigera mall — Checklista" }] }),
+  head: () => ({ meta: [{ title: "Redigera checklista — Checklista" }] }),
   component: () => <OrgPage>{(ctx) => <Editor ctx={ctx} />}</OrgPage>,
 });
 
@@ -260,6 +260,11 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         }
       />
       {!manage && <p className="mb-4 text-sm text-muted-foreground">{t("templates.readOnly")}</p>}
+      {query.data.tpl.is_base && (
+        <p className="mb-4 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
+          {t("templates.baseEditorNote")}
+        </p>
+      )}
 
       <fieldset disabled={!manage} className="space-y-6">
         <div className="grid gap-4 rounded-xl border bg-card p-5 md:grid-cols-2">

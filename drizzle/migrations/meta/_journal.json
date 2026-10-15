@@ -29,6 +29,13 @@
       "when": 1791439860120,
       "tag": "0003_template_scheduled_deletion",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791439960120,
+      "tag": "0004_base_checklist",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Archive, Copy, Pencil, Plus, RotateCcw, Trash2, Undo2 } from "lucide-react";
+import { Archive, Copy, ListChecks, Pencil, Plus, RotateCcw, Trash2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useT } from "@/i18n";
@@ -30,7 +30,7 @@ const DELETE_GRACE_DAYS = 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const Route = createFileRoute("/_authenticated/templates/")({
-  head: () => ({ meta: [{ title: "Mallar — Checklista" }] }),
+  head: () => ({ meta: [{ title: "Administrera checklistor — Checklista" }] }),
   component: () => <OrgPage>{(ctx) => <Templates ctx={ctx} />}</OrgPage>,
 });
 
@@ -60,11 +60,46 @@ function Templates({ ctx }: { ctx: OrgContext }) {
     },
   });
 
-  const all = templates.data ?? [];
+  const all = (templates.data ?? []).filter((x) => !x.is_base);
+  const base = templates.data?.find((x) => x.is_base);
   const activeCount = all.filter((x) => x.status === "active").length;
   const max = PLANS[ctx.organization.plan].maxTemplates;
   const atLimit = max !== null && activeCount >= max;
   const shown = all.filter((x) => x.status === tab);
+
+  const baseItems = useQuery({
+    queryKey: ["template-items", base?.id],
+    enabled: !!base,
+    queryFn: async () => latestItems(base!.id),
+  });
+
+  async function latestItems(templateId: string) {
+    const { data: ver } = await supabase
+      .from("template_versions")
+      .select("id")
+      .eq("template_id", templateId)
+      .order("version", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!ver) return [];
+    const { data, error } = await supabase.from("template_items").select("*").eq("version_id", ver.id);
+    if (error) throw error;
+    return data;
+  }
+
+  async function createBase() {
+    const { data: tpl, error } = await supabase
+      .from("templates")
+      .insert({ org_id: ctx.orgId, title: t("templates.base"), is_base: true, created_by: ctx.userId })
+      .select()
+      .single();
+    if (error) { toast.error(error.message); return; }
+    await supabase
+      .from("template_versions")
+      .insert({ template_id: tpl.id, org_id: ctx.orgId, version: 1, created_by: ctx.userId });
+    await logAudit(ctx.orgId, ctx.userId, "template.base_created", "template", tpl.id);
+    navigate({ to: "/templates/$templateId", params: { templateId: tpl.id } });
+  }
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -74,9 +109,20 @@ function Templates({ ctx }: { ctx: OrgContext }) {
       .select()
       .single();
     if (error) { toast.error(error.message); return; }
-    await supabase
+    const { data: ver } = await supabase
       .from("template_versions")
-      .insert({ template_id: tpl.id, org_id: ctx.orgId, version: 1, created_by: ctx.userId });
+      .insert({ template_id: tpl.id, org_id: ctx.orgId, version: 1, created_by: ctx.userId })
+      .select()
+      .single();
+    // Start every new checklist with the questions from the base checklist.
+    if (base && ver) {
+      const items = await latestItems(base.id);
+      if (items.length) {
+        await supabase.from("template_items").insert(
+          items.map(({ id: _id, version_id: _v, ...rest }) => ({ ...rest, version_id: ver.id })),
+        );
+      }
+    }
     await logAudit(ctx.orgId, ctx.userId, "template.created", "template", tpl.id, { title: tpl.title });
     setOpen(false);
     navigate({ to: "/templates/$templateId", params: { templateId: tpl.id } });
@@ -176,6 +222,36 @@ function Templates({ ctx }: { ctx: OrgContext }) {
           <Button asChild size="sm" variant="outline">
             <Link to="/billing">{t("limit.upgradeCta")}</Link>
           </Button>
+        </div>
+      )}
+
+      {manage && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 p-5">
+          <div className="flex items-start gap-3">
+            <ListChecks className="mt-0.5 size-5 shrink-0 text-primary" />
+            <div>
+              <p className="font-semibold">
+                {t("templates.base")}
+                {base && baseItems.data && (
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    {t("templates.baseItems", { count: baseItems.data.length })}
+                  </span>
+                )}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">{t("templates.baseDesc")}</p>
+            </div>
+          </div>
+          {base ? (
+            <Button asChild size="sm" variant="outline">
+              <Link to="/templates/$templateId" params={{ templateId: base.id }}>
+                <Pencil className="size-4" /> {t("common.edit")}
+              </Link>
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" onClick={createBase}>
+              <Plus className="size-4" /> {t("templates.baseCreate")}
+            </Button>
+          )}
         </div>
       )}
 

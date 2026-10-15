@@ -39,7 +39,7 @@ function NewRun({ ctx }: { ctx: OrgContext }) {
       return data;
     },
   });
-  const active = (templates.data ?? []).filter((x) => x.status === "active");
+  const active = (templates.data ?? []).filter((x) => x.status === "active" && !x.is_base);
 
   useEffect(() => {
     if (!templateId && active[0]) setTemplateId(active[0].id);

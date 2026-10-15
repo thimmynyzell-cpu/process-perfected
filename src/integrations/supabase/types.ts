@@ -406,6 +406,7 @@ export type Database = {
           delete_after: string | null
           description: string | null
           id: string
+          is_base: boolean
           org_id: string
           status: Database["public"]["Enums"]["template_status"]
           title: string
@@ -419,6 +420,7 @@ export type Database = {
           delete_after?: string | null
           description?: string | null
           id?: string
+          is_base?: boolean
           org_id: string
           status?: Database["public"]["Enums"]["template_status"]
           title: string
@@ -432,6 +434,7 @@ export type Database = {
           delete_after?: string | null
           description?: string | null
           id?: string
+          is_base?: boolean
           org_id?: string
           status?: Database["public"]["Enums"]["template_status"]
           title?: string
