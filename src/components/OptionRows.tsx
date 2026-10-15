@@ -23,7 +23,12 @@ export function OptionRows({
   extra?: (option: string) => ReactNode;
 }) {
   const t = useT();
-  const rows = value === "" ? [] : value.split("\n");
+  // Rows live in local state: a single empty row and no rows both join to "",
+  // so they can't be derived from `value` alone.
+  const [rows, setRows] = useState(() => split(value));
+  useEffect(() => {
+    if (value !== rows.join("\n")) setRows(split(value));
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
   const [focusRow, setFocusRow] = useState<number | null>(null);
 
@@ -34,7 +39,10 @@ export function OptionRows({
     }
   }, [focusRow]);
 
-  const set = (next: string[]) => onChange(next.join("\n"));
+  const set = (next: string[]) => {
+    setRows(next);
+    onChange(next.join("\n"));
+  };
   const add = (at: number) => {
     set([...rows.slice(0, at), "", ...rows.slice(at)]);
     setFocusRow(at);
@@ -99,3 +107,5 @@ export function OptionRows({
     </div>
   );
 }
+
+const split = (value: string) => (value === "" ? [] : value.split("\n"));

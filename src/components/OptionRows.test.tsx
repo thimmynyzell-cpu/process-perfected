@@ -68,3 +68,12 @@ describe("OptionRows extras", () => {
     expect(screen.getAllByTestId("extra").map((e) => e.textContent)).toEqual(["A2", "B"]);
   });
 });
+
+describe("OptionRows add button", () => {
+  it("adds a first row to an empty list", () => {
+    setup("");
+    fireEvent.click(screen.getByRole("button", { name: /Lägg till kryssruta/ }));
+    expect(rows()).toHaveLength(1);
+    expect(document.activeElement).toBe(rows()[0]);
+  });
+});
