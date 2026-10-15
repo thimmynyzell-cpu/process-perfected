@@ -1,11 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowLeft, ArrowUp, GitBranch, Network, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, CornerDownRight, GitBranch, Network, Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FlowTree } from "@/components/FlowTree";
 import { CheckboxOptions } from "@/components/CheckboxOptions";
-import { branchValues, type FlowNode } from "@/lib/flow";
+import { branchValues, jumpKeys, type FlowNode } from "@/lib/flow";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -33,6 +33,8 @@ type DraftItem = {
   options: string;
   parent: string;
   show_when: string;
+  /** Answer value → key of a later item to jump to. */
+  jumps: Record<string, string>;
 };
 
 const optList = (s: string) => s.split("\n").map((o) => o.trim()).filter(Boolean);
@@ -98,6 +100,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
       items.map((i) => ({
         parent: i.parent_position != null ? (posKey.get(i.parent_position) ?? "") : "",
         show_when: i.show_when ?? "",
+        jumps: jumpKeys(i.jump_to, posKey),
         key: i.id,
         section: i.section ?? "",
         type: i.type,
@@ -122,6 +125,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
     options: optList(i.options),
     parentKey: i.parent && i.show_when ? i.parent : null,
     showWhen: i.parent && i.show_when ? i.show_when : null,
+    jumps: i.jumps,
   }));
   const yesNo = (v: string) => (v === "true" ? t("flow.yes") : v === "false" ? t("flow.no") : v);
 
@@ -165,6 +169,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         options: "",
         parent: "",
         show_when: "",
+        jumps: {},
       },
     ]);
 
@@ -186,6 +191,14 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         .map((i, position) => ({
           parent_position: i.parent && i.show_when && keyPos.has(i.parent) ? keyPos.get(i.parent)! : null,
           show_when: i.parent && i.show_when && keyPos.has(i.parent) ? i.show_when : null,
+          // Keep jumps to items that still exist, come later, and use a current answer value.
+          jump_to: Object.fromEntries(
+            Object.entries(i.jumps).flatMap(([v, key]) => {
+              const target = keyPos.get(key);
+              const valid = branchValues(i.type, optList(i.options)).includes(v);
+              return valid && target !== undefined && target > position ? [[v, target]] : [];
+            }),
+          ),
           version_id: ver.id,
           org_id: ctx.orgId,
           position,
@@ -406,6 +419,13 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                       </div>
                     );
                   })()}
+                  <JumpEditor
+                    item={item}
+                    later={items.slice(idx + 1)}
+                    number={(key) => items.findIndex((x) => x.key === key) + 1}
+                    yesNo={yesNo}
+                    onChange={(jumps) => update(idx, { jumps })}
+                  />
                   <div className="flex flex-wrap items-center gap-4 text-sm md:col-span-3">
                     {(
                       [
@@ -469,5 +489,68 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         )}
       </fieldset>
     </>
+  );
+}
+
+// Per answer value, pick a later question to jump to; the ones in between are skipped.
+function JumpEditor({
+  item,
+  later,
+  number,
+  yesNo,
+  onChange,
+}: {
+  item: DraftItem;
+  later: DraftItem[];
+  number: (key: string) => number;
+  yesNo: (v: string) => string;
+  onChange: (jumps: Record<string, string>) => void;
+}) {
+  const t = useT();
+  const values = branchValues(item.type, optList(item.options));
+  const hasJumps = Object.keys(item.jumps).length > 0;
+  const [open, setOpen] = useState(hasJumps);
+  if (!values.length || !later.length) return null;
+
+  if (!open && !hasJumps) {
+    return (
+      <div className="md:col-span-3">
+        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(true)}>
+          <CornerDownRight className="size-4" /> {t("flow.addJump")}
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-dashed p-3 text-sm md:col-span-3">
+      <p className="flex items-center gap-1.5 font-medium">
+        <CornerDownRight className="size-4 text-primary" /> {t("flow.jumpTitle")}
+      </p>
+      {values.map((v) => (
+        <div key={v} className="flex flex-wrap items-center gap-2">
+          <span className="text-muted-foreground">{t("flow.if")}</span>
+          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">{yesNo(v)}</span>
+          <span className="text-muted-foreground">{t("flow.goTo")}</span>
+          <select
+            className={nativeSelect + " w-auto max-w-xs"}
+            value={item.jumps[v] && later.some((x) => x.key === item.jumps[v]) ? item.jumps[v] : ""}
+            onChange={(e) => {
+              const next = { ...item.jumps };
+              if (e.target.value) next[v] = e.target.value;
+              else delete next[v];
+              onChange(next);
+            }}
+          >
+            <option value="">{t("flow.nextQuestion")}</option>
+            {later.map((x) => (
+              <option key={x.key} value={x.key}>
+                {number(x.key)}. {x.label || "—"}
+              </option>
+            ))}
+          </select>
+        </div>
+      ))}
+    </div>
   );
 }

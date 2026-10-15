@@ -295,6 +295,7 @@ export type Database = {
           allow_photo: boolean
           help_text: string | null
           id: string
+          jump_to: Json
           label: string
           options: Json
           org_id: string
@@ -311,6 +312,7 @@ export type Database = {
           allow_photo?: boolean
           help_text?: string | null
           id?: string
+          jump_to?: Json
           label: string
           options?: Json
           org_id: string
@@ -327,6 +329,7 @@ export type Database = {
           allow_photo?: boolean
           help_text?: string | null
           id?: string
+          jump_to?: Json
           label?: string
           options?: Json
           org_id?: string

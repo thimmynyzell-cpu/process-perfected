@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { visibleKeys } from "@/lib/flow";
+import { jumpKeys, visibleKeys } from "@/lib/flow";
 
 type Item = Database["public"]["Tables"]["template_items"]["Row"];
 type Answer = { value: Json | null; note: string; photo_url: string };
@@ -86,6 +86,7 @@ function RunView({ ctx }: { ctx: OrgContext }) {
       options: Array.isArray(i.options) ? (i.options as string[]) : [],
       parentKey: i.parent_position != null ? (posId.get(i.parent_position) ?? null) : null,
       showWhen: i.show_when,
+      jumps: jumpKeys(i.jump_to, posId),
     })),
     Object.fromEntries(Object.entries(answers).map(([k, a]) => [k, a.value])),
   );

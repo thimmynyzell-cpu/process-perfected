@@ -1,4 +1,4 @@
-import { CircleCheck, CirclePlay, GitBranch } from "lucide-react";
+import { CircleCheck, CirclePlay, CornerDownRight, GitBranch } from "lucide-react";
 import { useT } from "@/i18n";
 import type { FlowNode } from "@/lib/flow";
 import { branchValues } from "@/lib/flow";
@@ -40,7 +40,7 @@ function NodeView({ node, all, onSelect }: { node: FlowNode; all: FlowNode[]; on
   const t = useT();
   const children = all.filter((c) => c.parentKey === node.key);
   const values = branchValues(node.type, node.options);
-  const label = (v: string) => (node.type === "checkbox" ? (v === "true" ? t("flow.yes") : t("flow.no")) : v);
+  const label = (v: string) => (v === "true" ? t("flow.yes") : v === "false" ? t("flow.no") : v);
   const branches = values.map((v) => ({ v, items: children.filter((c) => c.showWhen === v) })).filter((b) => b.items.length);
   return (
     <li className="relative py-1.5">
@@ -61,6 +61,17 @@ function NodeView({ node, all, onSelect }: { node: FlowNode; all: FlowNode[]; on
         </p>
         <p className="text-xs text-muted-foreground">{t(`itemType.${node.type}` as never)}</p>
       </div>
+      {Object.entries(node.jumps ?? {}).map(([v, key]) => {
+        const idx = all.findIndex((x) => x.key === key);
+        if (idx < 0) return null;
+        return (
+          <p key={v} className="mt-1 flex items-center gap-1.5 pl-4 text-xs text-muted-foreground">
+            <CornerDownRight className="size-3.5 text-primary" />
+            {t("flow.if")} <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">{label(v)}</span>
+            {t("flow.jumpsTo")} {idx + 1}. {all[idx]!.label || "—"}
+          </p>
+        );
+      })}
       {branches.length > 0 && (
         <div className="mt-2 space-y-2 pl-4">
           {branches.map((b) => (
