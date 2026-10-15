@@ -5,6 +5,7 @@ import { ArrowDown, ArrowLeft, ArrowUp, CornerDownRight, GitBranch, Network, Plu
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FlowTree } from "@/components/FlowTree";
 import { OptionRows } from "@/components/OptionRows";
+import { Hint } from "@/components/Hint";
 import { branchValues, jumpKeys, type FlowNode } from "@/lib/flow";
 import { LEVELS, type Level } from "@/lib/levels";
 import { toast } from "sonner";
@@ -75,6 +76,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   const [items, setItems] = useState<DraftItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
+  const [defaultLevels, setDefaultLevels] = useDefaultLevels();
   const [highlightKey, setHighlightKey] = useState<string | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const itemRefs = useRef(new Map<string, HTMLLIElement>());
@@ -173,7 +175,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         parent: "",
         show_when: "",
         jumps: {},
-        levels: [...LEVELS],
+        levels: [...defaultLevels],
       },
     ]);
 
@@ -313,7 +315,17 @@ function Editor({ ctx }: { ctx: OrgContext }) {
           </div>
         </div>
 
-        <p className="text-xs text-muted-foreground">{t("templates.versionNote")}</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">{t("templates.versionNote")}</p>
+          <div className="text-sm">
+            <LevelPicker
+              label={t("level.newDefault")}
+              hint={t("level.newDefaultHint")}
+              value={defaultLevels}
+              onChange={setDefaultLevels}
+            />
+          </div>
+        </div>
 
         {items.length === 0 && (
           <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
@@ -459,7 +471,14 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                         {label}
                       </label>
                     ))}
-                    <LevelPicker value={item.levels} onChange={(levels) => update(idx, { levels })} />
+                    <div className="md:ml-auto">
+                      <LevelPicker
+                        label={t("level.shownFor")}
+                        hint={t("level.shownForHint")}
+                        value={item.levels}
+                        onChange={(levels) => update(idx, { levels })}
+                      />
+                    </div>
                   </div>
                 </div>
                 {manage && (
@@ -642,29 +661,68 @@ function JumpEditor({
 }
 
 // Which experience levels see the question; at least one stays selected.
-function LevelPicker({ value, onChange }: { value: Level[]; onChange: (levels: Level[]) => void }) {
+function LevelPicker({
+  value,
+  onChange,
+  label,
+  hint,
+}: {
+  value: Level[];
+  onChange: (levels: Level[]) => void;
+  label: string;
+  hint: string;
+}) {
   const t = useT();
   return (
-    <div className="flex flex-wrap items-center gap-1.5 md:ml-auto">
-      <span className="text-muted-foreground">{t("level.shownFor")}</span>
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Hint text={hint}>
+        <span className="cursor-help text-muted-foreground underline decoration-dotted underline-offset-4">{label}</span>
+      </Hint>
       {LEVELS.map((l) => {
         const on = value.includes(l);
         return (
-          <button
-            key={l}
-            type="button"
-            aria-pressed={on}
-            disabled={on && value.length === 1}
-            onClick={() => onChange(on ? value.filter((x) => x !== l) : LEVELS.filter((x) => x === l || value.includes(x)))}
-            className={cn(
-              "rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors disabled:cursor-not-allowed",
-              on ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:border-primary/50",
-            )}
-          >
-            {t(`level.${l}`)}
-          </button>
+          <Hint key={l} text={t(`level.${l}Hint`)}>
+            <button
+              type="button"
+              aria-pressed={on}
+              disabled={on && value.length === 1}
+              onClick={() =>
+                onChange(on ? value.filter((x) => x !== l) : LEVELS.filter((x) => x === l || value.includes(x)))
+              }
+              className={cn(
+                "rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors disabled:cursor-not-allowed",
+                on ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:border-primary/50",
+              )}
+            >
+              {t(`level.${l}`)}
+            </button>
+          </Hint>
         );
       })}
     </div>
   );
+}
+
+const DEFAULT_LEVELS_KEY = "checklista.defaultLevels";
+
+/** Levels new questions start with; remembered per browser. */
+function useDefaultLevels() {
+  const [levels, setLevels] = useState<Level[]>(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(DEFAULT_LEVELS_KEY) ?? "null");
+      const valid = Array.isArray(stored) ? LEVELS.filter((l) => stored.includes(l)) : [];
+      return valid.length ? valid : [...LEVELS];
+    } catch {
+      return [...LEVELS];
+    }
+  });
+  const set = (next: Level[]) => {
+    setLevels(next);
+    try {
+      localStorage.setItem(DEFAULT_LEVELS_KEY, JSON.stringify(next));
+    } catch {
+      // storage unavailable; the choice lasts for this visit
+    }
+  };
+  return [levels, set] as const;
 }

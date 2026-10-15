@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CheckCircle2, Printer } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
@@ -16,6 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { jumpKeys, visibleKeys } from "@/lib/flow";
 import { shownForLevel } from "@/lib/levels";
+import { Hint } from "@/components/Hint";
 
 type Item = Database["public"]["Tables"]["template_items"]["Row"];
 type Answer = { value: Json | null; note: string; photo_url: string };
@@ -54,6 +55,8 @@ function RunView({ ctx }: { ctx: OrgContext }) {
   });
 
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
+  // Also show questions meant for other levels than the member's own.
+  const [otherLevels, setOtherLevels] = useState(false);
   useEffect(() => {
     if (!query.data) return;
     const map: Record<string, Answer> = {};
@@ -78,20 +81,25 @@ function RunView({ ctx }: { ctx: OrgContext }) {
   const { run } = query.data;
   const all = query.data.items;
   const posId = new Map(all.map((i) => [i.position, i.id]));
-  const vis = visibleKeys(
-    all.map((i) => ({
-      key: i.id,
-      label: i.label,
-      type: i.type,
-      required: i.required,
-      options: Array.isArray(i.options) ? (i.options as string[]) : [],
-      parentKey: i.parent_position != null ? (posId.get(i.parent_position) ?? null) : null,
-      showWhen: i.show_when,
-      jumps: jumpKeys(i.jump_to, posId),
-      hidden: !shownForLevel(i.levels, ctx.level),
-    })),
-    Object.fromEntries(Object.entries(answers).map(([k, a]) => [k, a.value])),
+  const nodes = all.map((i) => ({
+    key: i.id,
+    label: i.label,
+    type: i.type,
+    required: i.required,
+    options: Array.isArray(i.options) ? (i.options as string[]) : [],
+    parentKey: i.parent_position != null ? (posId.get(i.parent_position) ?? null) : null,
+    showWhen: i.show_when,
+    jumps: jumpKeys(i.jump_to, posId),
+  }));
+  const values = Object.fromEntries(Object.entries(answers).map(([k, a]) => [k, a.value]));
+  const ownLevel = visibleKeys(
+    all.map((i, idx) => ({ ...nodes[idx]!, hidden: !shownForLevel(i.levels, ctx.level) })),
+    values,
   );
+  const anyLevel = visibleKeys(nodes, values);
+  const vis = otherLevels ? anyLevel : ownLevel;
+  // Questions shown only because other levels are switched on; they are optional.
+  const extra = new Set([...anyLevel].filter((k) => !ownLevel.has(k)));
   const items = all.filter((i) => vis.has(i.id));
   const done = run.status === "completed";
   const filled = items.filter((i) => isFilled(i, answers[i.id])).length;
@@ -123,7 +131,7 @@ function RunView({ ctx }: { ctx: OrgContext }) {
   const current = (itemId: string): Answer => answers[itemId] ?? { value: null, note: "", photo_url: "" };
 
   async function complete() {
-    const missing = items.filter((i) => i.required && !isFilled(i, answers[i.id]));
+    const missing = items.filter((i) => i.required && !extra.has(i.id) && !isFilled(i, answers[i.id]));
     if (missing.length) { toast.error(t("run.missingRequired")); return; }
     const { error } = await supabase
       .from("runs")
@@ -170,6 +178,16 @@ function RunView({ ctx }: { ctx: OrgContext }) {
           </span>
         </div>
         <Progress value={pct} />
+        {extra.size > 0 && (
+          <div className="mt-3 flex justify-end">
+            <Hint text={t("level.showOthersHint")}>
+              <Button size="sm" variant="ghost" onClick={() => setOtherLevels((v) => !v)}>
+                {otherLevels ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                {t(otherLevels ? "level.hideOthers" : "level.showOthers", { count: extra.size })}
+              </Button>
+            </Hint>
+          </div>
+        )}
       </div>
 
       <div className="space-y-6">
@@ -188,7 +206,7 @@ function RunView({ ctx }: { ctx: OrgContext }) {
                   <li key={item.id} className="space-y-3 p-4">
                     {item.type === "checkbox" && Array.isArray(item.options) && item.options.length > 0 ? (
                       <>
-                        <ItemLabel item={item} ok={ok} />
+                        <ItemLabel item={item} ok={ok} extra={extra.has(item.id)} />
                         <div className="space-y-2 pl-1">
                           {(item.options as string[]).map((o) => {
                             const sel = Array.isArray(a.value) ? (a.value as string[]) : [];
@@ -219,11 +237,11 @@ function RunView({ ctx }: { ctx: OrgContext }) {
                           checked={a.value === true}
                           onCheckedChange={(v) => persist(item.id, { ...a, value: v === true })}
                         />
-                        <ItemLabel item={item} ok={ok} />
+                        <ItemLabel item={item} ok={ok} extra={extra.has(item.id)} />
                       </label>
                     ) : (
                       <>
-                        <ItemLabel item={item} ok={ok} />
+                        <ItemLabel item={item} ok={ok} extra={extra.has(item.id)} />
                         {item.type === "dropdown" ? (
                           <select
                             className={nativeSelect}
@@ -304,12 +322,18 @@ function RunView({ ctx }: { ctx: OrgContext }) {
   );
 }
 
-function ItemLabel({ item, ok }: { item: Item; ok: boolean }) {
+function ItemLabel({ item, ok, extra }: { item: Item; ok: boolean; extra: boolean }) {
+  const t = useT();
   return (
     <div className="min-w-0">
       <p className={cn("font-medium leading-snug", ok && item.type === "checkbox" && "text-muted-foreground line-through")}>
         {item.label}
-        {item.required && <span className="ml-1 text-destructive">*</span>}
+        {item.required && !extra && <span className="ml-1 text-destructive">*</span>}
+        {extra && (
+          <span className="ml-2 rounded-full bg-muted px-2 py-0.5 align-middle text-[11px] font-medium text-muted-foreground">
+            {t("level.otherLevel")}
+          </span>
+        )}
       </p>
       {item.help_text && <p className="mt-0.5 text-xs text-muted-foreground">{item.help_text}</p>}
     </div>
