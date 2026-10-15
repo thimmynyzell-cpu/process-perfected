@@ -85,7 +85,7 @@ describe("OptionRows tip", () => {
     setup("Ett");
     fireEvent.focus(rows()[0]!);
     expect(screen.getByRole("status").textContent).toMatch(/Tab/);
-    fireEvent.click(screen.getByRole("button", { name: "Visa inte fler tips" }));
+    fireEvent.click(screen.getByRole("button", { name: "Visa inte igen" }));
     expect(screen.queryByRole("status")).toBeNull();
   });
 });

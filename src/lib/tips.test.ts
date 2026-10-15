@@ -13,12 +13,12 @@ describe("takeTip", () => {
     expect(takeTip(1000 + 10 * DAY)).toBeNull();
   });
 
-  it("waits a few days between tips and rotates them", () => {
+  it("waits a few days between tips", () => {
     takeTip(1000);
     resetTipsForTest();
     expect(takeTip(1000 + DAY)).toBeNull();
     resetTipsForTest();
-    expect(takeTip(1000 + 4 * DAY)).toBe(1);
+    expect(takeTip(1000 + 4 * DAY)).toBe(0);
   });
 
   it("stops for good when turned off", () => {

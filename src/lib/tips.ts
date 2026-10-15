@@ -2,7 +2,7 @@
 // after a pause, so they help without nagging. Stored per browser.
 const KEY = "checklista.optionTip";
 const PAUSE_MS = 3 * 24 * 60 * 60 * 1000;
-export const TIP_COUNT = 3;
+export const TIP_COUNT = 1;
 
 type TipState = { lastShown: number; next: number; off: boolean };
 
