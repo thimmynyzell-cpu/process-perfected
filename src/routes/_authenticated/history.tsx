@@ -68,7 +68,7 @@ function History({ ctx }: { ctx: OrgContext }) {
     ]);
     const labels = new Map((items ?? []).map((i) => [i.id, i]));
     const rows: (string | number | null)[][] = [
-      ["Referens", "Mall", "Status", "Startad av", "Startad", "Klar", "Avsnitt", "Punkt", "Svar", "Anteckning"],
+      ["Referens", "Checklista", "Status", "Startad av", "Startad", "Klar", "Avsnitt", "Punkt", "Svar", "Anteckning"],
     ];
     for (const r of filtered) {
       const base = [

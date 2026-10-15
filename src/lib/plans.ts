@@ -11,7 +11,7 @@ export type PlanConfig = {
 export const PLANS: Record<PlanId, PlanConfig> = {
   free: {
     id: "free",
-    maxTemplates: 3,
+    maxTemplates: 10,
     maxSeats: 1,
     pricePerSeat: 0,
     features: ["templates", "runs", "history"],
