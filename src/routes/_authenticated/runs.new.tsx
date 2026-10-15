@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
+import { currentVersionId } from "@/lib/versions";
 import { useT } from "@/i18n";
 import { logAudit } from "@/lib/auth";
 import { OrgPage, Spinner, EmptyState, nativeSelect, type OrgContext } from "@/components/OrgPage";
@@ -49,20 +50,15 @@ function NewRun({ ctx }: { ctx: OrgContext }) {
     e.preventDefault();
     setBusy(true);
     try {
-      const { data: ver, error: vErr } = await supabase
-        .from("template_versions")
-        .select("id")
-        .eq("template_id", templateId)
-        .order("version", { ascending: false })
-        .limit(1)
-        .single();
-      if (vErr) throw vErr;
+      const tpl = active.find((x) => x.id === templateId);
+      const verId = tpl ? await currentVersionId(tpl.id, tpl.current_version) : null;
+      if (!verId) throw new Error(t("error.generic"));
       const { data: run, error } = await supabase
         .from("runs")
         .insert({
           org_id: ctx.orgId,
           template_id: templateId,
-          version_id: ver.id,
+          version_id: verId,
           reference: reference.trim() || null,
           due_at: due ? new Date(due).toISOString() : null,
           started_by: ctx.userId,

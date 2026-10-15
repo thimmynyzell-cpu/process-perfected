@@ -8,6 +8,7 @@ import { useT } from "@/i18n";
 import { canManage, logAudit } from "@/lib/auth";
 import { PLANS } from "@/lib/plans";
 import { pickItems } from "@/lib/items";
+import { currentVersionId } from "@/lib/versions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrgPage, Spinner, EmptyState, type OrgContext } from "@/components/OrgPage";
 import { PageHeader } from "@/components/AppShell";
@@ -76,19 +77,13 @@ function Templates({ ctx }: { ctx: OrgContext }) {
   const baseItems = useQuery({
     queryKey: ["template-items", base?.id],
     enabled: !!base,
-    queryFn: async () => latestItems(base!.id),
+    queryFn: async () => latestItems(base!),
   });
 
-  async function latestItems(templateId: string) {
-    const { data: ver } = await supabase
-      .from("template_versions")
-      .select("id")
-      .eq("template_id", templateId)
-      .order("version", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!ver) return [];
-    const { data, error } = await supabase.from("template_items").select("*").eq("version_id", ver.id);
+  async function latestItems(tpl: { id: string; current_version: number }) {
+    const verId = await currentVersionId(tpl.id, tpl.current_version);
+    if (!verId) return [];
+    const { data, error } = await supabase.from("template_items").select("*").eq("version_id", verId);
     if (error) throw error;
     return data;
   }
@@ -127,7 +122,7 @@ function Templates({ ctx }: { ctx: OrgContext }) {
       .single();
     // Start the new checklist with the chosen questions from the base checklist.
     if (base && ver && baseKeep.size) {
-      const items = pickItems(await latestItems(base.id), baseKeep);
+      const items = pickItems(await latestItems(base), baseKeep);
       if (items.length) {
         await supabase.from("template_items").insert(
           items.map(({ id: _id, version_id: _v, ...rest }) => ({ ...rest, version_id: ver.id })),
@@ -142,13 +137,7 @@ function Templates({ ctx }: { ctx: OrgContext }) {
   async function duplicate(id: string) {
     if (atLimit) { toast.error(t("limit.templates", { max: max ?? 0 })); return; }
     const src = all.find((x) => x.id === id)!;
-    const { data: ver } = await supabase
-      .from("template_versions")
-      .select("id")
-      .eq("template_id", id)
-      .order("version", { ascending: false })
-      .limit(1)
-      .single();
+    const verId = await currentVersionId(id, src.current_version);
     const { data: tpl, error } = await supabase
       .from("templates")
       .insert({
@@ -166,8 +155,8 @@ function Templates({ ctx }: { ctx: OrgContext }) {
       .insert({ template_id: tpl.id, org_id: ctx.orgId, version: 1, created_by: ctx.userId })
       .select()
       .single();
-    if (ver && newVer) {
-      const { data: items } = await supabase.from("template_items").select("*").eq("version_id", ver.id);
+    if (verId && newVer) {
+      const { data: items } = await supabase.from("template_items").select("*").eq("version_id", verId);
       if (items?.length) {
         await supabase.from("template_items").insert(
           items.map(({ id: _id, version_id: _v, ...rest }) => ({ ...rest, version_id: newVer.id })),

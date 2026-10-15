@@ -20,6 +20,7 @@ import { Hint } from "@/components/Hint";
 import { branchValues, jumpKeys, type FlowNode } from "@/lib/flow";
 import { LEVELS, type Level } from "@/lib/levels";
 import { reorder } from "@/lib/items";
+import { currentVersionId, nextVersionNumber } from "@/lib/versions";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -70,15 +71,9 @@ function Editor({ ctx }: { ctx: OrgContext }) {
     queryFn: async () => {
       const { data: tpl, error } = await supabase.from("templates").select("*").eq("id", templateId).single();
       if (error) throw error;
-      const { data: ver } = await supabase
-        .from("template_versions")
-        .select("id, version")
-        .eq("template_id", templateId)
-        .order("version", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const { data: items } = ver
-        ? await supabase.from("template_items").select("*").eq("version_id", ver.id).order("position")
+      const verId = await currentVersionId(templateId, tpl.current_version);
+      const { data: items } = verId
+        ? await supabase.from("template_items").select("*").eq("version_id", verId).order("position")
         : { data: [] };
       return { tpl, items: items ?? [] };
     },
@@ -211,15 +206,18 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   async function save() {
     if (!meta.title.trim()) return;
     setSaving(true);
+    // A version row inserted by this save, removed again if the save fails.
+    let pending: string | null = null;
     try {
       const tpl = query.data!.tpl;
-      const nextVersion = tpl.current_version + 1;
+      const nextVersion = await nextVersionNumber(tpl.id, tpl.current_version);
       const { data: ver, error } = await supabase
         .from("template_versions")
         .insert({ template_id: tpl.id, org_id: ctx.orgId, version: nextVersion, created_by: ctx.userId })
         .select()
         .single();
       if (error) throw error;
+      pending = ver.id;
       const kept = items.filter((i) => i.label.trim());
       const keyPos = new Map(kept.map((i, idx) => [i.key, idx]));
       const rows = kept
@@ -275,6 +273,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         })
         .eq("id", tpl.id);
       if (e3) throw e3;
+      pending = null;
       await logAudit(ctx.orgId, ctx.userId, "template.updated", "template", tpl.id, {
         title: meta.title,
         version: nextVersion,
@@ -283,7 +282,10 @@ function Editor({ ctx }: { ctx: OrgContext }) {
       qc.invalidateQueries({ queryKey: ["template", templateId] });
       qc.invalidateQueries({ queryKey: ["templates", ctx.orgId] });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : t("error.generic"));
+      if (pending) await supabase.from("template_versions").delete().eq("id", pending);
+      // Supabase errors are plain objects with a message, not Error instances.
+      const message = (err as { message?: unknown })?.message;
+      toast.error(typeof message === "string" && message ? message : t("error.generic"));
     } finally {
       setSaving(false);
     }
