@@ -511,26 +511,56 @@ function renameJump(jumps: Record<string, string>, from: string, to: string) {
   return to ? { ...rest, [to]: key! } : rest;
 }
 
-// Picks a later question to jump to for one answer; the ones in between are skipped.
+// Picks a later question to jump to for one answer; the ones in between are
+// skipped. Collapsed to a small arrow button until opened or a jump is set.
 function JumpSelect({
   value,
   later,
   number,
   onChange,
+  defaultOpen = false,
 }: {
   value: string | undefined;
   later: DraftItem[];
   number: (key: string) => number;
   onChange: (key: string) => void;
+  defaultOpen?: boolean;
 }) {
   const t = useT();
+  const current = value && later.some((x) => x.key === value) ? value : "";
+  const [open, setOpen] = useState(defaultOpen);
+  const selectRef = useRef<HTMLSelectElement>(null);
+
+  useEffect(() => {
+    if (open && !defaultOpen) selectRef.current?.focus();
+  }, [open, defaultOpen]);
+
+  if (!open && !current) {
+    return (
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        tabIndex={-1}
+        className="shrink-0 text-muted-foreground hover:text-primary"
+        title={t("flow.addJump")}
+        aria-label={t("flow.addJump")}
+        onClick={() => setOpen(true)}
+      >
+        <CornerDownRight className="size-4" />
+      </Button>
+    );
+  }
+
   return (
     <label className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground">
       <CornerDownRight className="size-4 text-primary" aria-label={t("flow.goTo")} />
       <select
+        ref={selectRef}
         className={nativeSelect + " w-auto max-w-[12rem]"}
-        value={value && later.some((x) => x.key === value) ? value : ""}
+        value={current}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={() => !defaultOpen && setOpen(false)}
       >
         <option value="">{t("flow.nextQuestion")}</option>
         {later.map((x) => (
@@ -584,6 +614,7 @@ function JumpEditor({
           <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">{yesNo(v)}</span>
           <span className="text-muted-foreground">{t("flow.goTo")}</span>
           <JumpSelect
+            defaultOpen
             value={item.jumps[v]}
             later={later}
             number={number}
