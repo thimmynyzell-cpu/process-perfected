@@ -212,7 +212,14 @@ function Editor({ ctx }: { ctx: OrgContext }) {
             i.type === "dropdown" || i.type === "checkbox" ? optList(i.options) : [],
         }));
       if (rows.length) {
-        const { error: e2 } = await supabase.from("template_items").insert(rows);
+        let { error: e2 } = await supabase.from("template_items").insert(rows);
+        // Databases without the jump_to migration reject the column; save without jumps.
+        if (e2 && e2.message.includes("jump_to")) {
+          ({ error: e2 } = await supabase
+            .from("template_items")
+            .insert(rows.map(({ jump_to: _j, ...rest }) => rest)));
+          if (!e2) toast.warning(t("flow.jumpsNotSaved"));
+        }
         if (e2) throw e2;
       }
       const { error: e3 } = await supabase
