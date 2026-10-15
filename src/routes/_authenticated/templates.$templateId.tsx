@@ -336,14 +336,10 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                 </span>
                 <div className="grid flex-1 gap-3 md:grid-cols-[1fr_10rem_10rem]">
                   <Input
+                    className="md:col-span-2"
                     placeholder={t("templates.label")}
                     value={item.label}
                     onChange={(e) => update(idx, { label: e.target.value })}
-                  />
-                  <Input
-                    placeholder={t("templates.section")}
-                    value={item.section}
-                    onChange={(e) => update(idx, { section: e.target.value })}
                   />
                   <select
                     className={nativeSelect}
