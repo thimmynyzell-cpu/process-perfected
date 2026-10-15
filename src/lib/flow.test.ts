@@ -60,3 +60,16 @@ describe("jumps", () => {
     expect([...visibleKeys(n, { a: "A", b: "B" })]).toEqual(["a", "c", "d"]);
   });
 });
+
+describe("hidden nodes", () => {
+  it("hides a node and continues past a jump target that is hidden", () => {
+    const n = [
+      node("a", { type: "dropdown", options: ["A"], jumps: { A: "c" } }),
+      node("b"),
+      node("c", { hidden: true }),
+      node("d"),
+    ];
+    expect([...visibleKeys(n, {})]).toEqual(["a", "b", "d"]);
+    expect([...visibleKeys(n, { a: "A" })]).toEqual(["a", "d"]);
+  });
+});

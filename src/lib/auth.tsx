@@ -3,6 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import type { Level } from "@/lib/levels";
 
 export type AppRole = Database["public"]["Enums"]["app_role"];
 export type Organization = Database["public"]["Tables"]["organizations"]["Row"];
@@ -42,6 +43,8 @@ export function useSession() {
 export type Membership = {
   orgId: string;
   role: AppRole;
+  /** Null until the levels migration has run. */
+  level: Level | null;
   organization: Organization;
 };
 
@@ -58,7 +61,8 @@ export function useMembership() {
 
       const { data, error } = await supabase
         .from("org_members")
-        .select("org_id, role, organizations(*)")
+        // "*" so a database without the level column still works.
+        .select("*, organizations(*)")
         .order("created_at", { ascending: true })
         .limit(1);
       if (error) throw error;
@@ -67,6 +71,7 @@ export function useMembership() {
       return {
         orgId: row.org_id,
         role: row.role,
+        level: (row as { level?: Level }).level ?? null,
         organization: row.organizations as Organization,
       };
     },

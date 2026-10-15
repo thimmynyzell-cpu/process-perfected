@@ -43,6 +43,13 @@
       "when": 1791440060120,
       "tag": "0005_item_jumps",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791440160120,
+      "tag": "0006_levels",
+      "breakpoints": true
     }
   ]
 }

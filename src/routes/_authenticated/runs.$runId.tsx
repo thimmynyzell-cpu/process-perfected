@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { jumpKeys, visibleKeys } from "@/lib/flow";
+import { shownForLevel } from "@/lib/levels";
 
 type Item = Database["public"]["Tables"]["template_items"]["Row"];
 type Answer = { value: Json | null; note: string; photo_url: string };
@@ -87,6 +88,7 @@ function RunView({ ctx }: { ctx: OrgContext }) {
       parentKey: i.parent_position != null ? (posId.get(i.parent_position) ?? null) : null,
       showWhen: i.show_when,
       jumps: jumpKeys(i.jump_to, posId),
+      hidden: !shownForLevel(i.levels, ctx.level),
     })),
     Object.fromEntries(Object.entries(answers).map(([k, a]) => [k, a.value])),
   );

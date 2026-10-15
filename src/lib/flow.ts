@@ -8,6 +8,8 @@ export type FlowNode = {
   showWhen: string | null;
   /** Answer value → key of a later node to jump to. */
   jumps?: Record<string, string>;
+  /** Hidden regardless of answers, e.g. not shown at the member's level. */
+  hidden?: boolean;
 };
 
 /** Whether a parent's answer satisfies a child's branch condition. */
@@ -66,8 +68,8 @@ export function visibleKeys(nodes: FlowNode[], answers: Record<string, unknown>)
   const memo = new Map<string, boolean>();
   const visit = (n: FlowNode, depth = 0): boolean => {
     if (memo.has(n.key)) return memo.get(n.key)!;
-    let ok = true;
-    if (n.parentKey && depth < 50) {
+    let ok = !n.hidden;
+    if (ok && n.parentKey && depth < 50) {
       const p = byKey.get(n.parentKey);
       ok = !!p && visit(p, depth + 1) && matchesBranch(p.type, answers[p.key], n.showWhen);
     }

@@ -97,6 +97,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          level: string
           org_id: string
           role: Database["public"]["Enums"]["app_role"]
           user_id: string
@@ -104,6 +105,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          level?: string
           org_id: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id: string
@@ -111,6 +113,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          level?: string
           org_id?: string
           role?: Database["public"]["Enums"]["app_role"]
           user_id?: string
@@ -297,6 +300,7 @@ export type Database = {
           id: string
           jump_to: Json
           label: string
+          levels: string[]
           options: Json
           org_id: string
           parent_position: number | null
@@ -314,6 +318,7 @@ export type Database = {
           id?: string
           jump_to?: Json
           label: string
+          levels?: string[]
           options?: Json
           org_id: string
           parent_position?: number | null
@@ -331,6 +336,7 @@ export type Database = {
           id?: string
           jump_to?: Json
           label?: string
+          levels?: string[]
           options?: Json
           org_id?: string
           parent_position?: number | null

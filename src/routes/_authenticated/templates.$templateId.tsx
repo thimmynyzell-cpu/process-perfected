@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { FlowTree } from "@/components/FlowTree";
 import { OptionRows } from "@/components/OptionRows";
 import { branchValues, jumpKeys, type FlowNode } from "@/lib/flow";
+import { LEVELS, type Level } from "@/lib/levels";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -34,6 +35,8 @@ type DraftItem = {
   show_when: string;
   /** Answer value → key of a later item to jump to. */
   jumps: Record<string, string>;
+  /** Experience levels the question is shown to. */
+  levels: Level[];
 };
 
 const optList = (s: string) => s.split("\n").map((o) => o.trim()).filter(Boolean);
@@ -100,6 +103,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         parent: i.parent_position != null ? (posKey.get(i.parent_position) ?? "") : "",
         show_when: i.show_when ?? "",
         jumps: jumpKeys(i.jump_to, posKey),
+        levels: Array.isArray(i.levels) ? LEVELS.filter((l) => i.levels.includes(l)) : [...LEVELS],
         key: i.id,
         section: i.section ?? "",
         type: i.type,
@@ -169,6 +173,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         parent: "",
         show_when: "",
         jumps: {},
+        levels: [...LEVELS],
       },
     ]);
 
@@ -198,6 +203,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
               return valid && target !== undefined && target > position ? [[v, target]] : [];
             }),
           ),
+          levels: i.levels,
           version_id: ver.id,
           org_id: ctx.orgId,
           position,
@@ -212,15 +218,20 @@ function Editor({ ctx }: { ctx: OrgContext }) {
             i.type === "dropdown" || i.type === "checkbox" ? optList(i.options) : [],
         }));
       if (rows.length) {
-        let { error: e2 } = await supabase.from("template_items").insert(rows);
-        // Databases without the jump_to migration reject the column; save without jumps.
-        if (e2 && e2.message.includes("jump_to")) {
-          ({ error: e2 } = await supabase
-            .from("template_items")
-            .insert(rows.map(({ jump_to: _j, ...rest }) => rest)));
-          if (!e2) toast.warning(t("flow.jumpsNotSaved"));
+        // Databases without the jump or level migrations reject those columns;
+        // drop the rejected column and save the rest.
+        let payload: Record<string, unknown>[] = rows;
+        let dropped = false;
+        let e2 = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          ({ error: e2 } = await supabase.from("template_items").insert(payload as typeof rows));
+          const col = e2 && ["jump_to", "levels"].find((c) => e2!.message.includes(c));
+          if (!col) break;
+          payload = payload.map(({ [col]: _drop, ...rest }) => rest);
+          dropped = true;
         }
         if (e2) throw e2;
+        if (dropped) toast.warning(t("flow.jumpsNotSaved"));
       }
       const { error: e3 } = await supabase
         .from("templates")
@@ -448,6 +459,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                         {label}
                       </label>
                     ))}
+                    <LevelPicker value={item.levels} onChange={(levels) => update(idx, { levels })} />
                   </div>
                 </div>
                 {manage && (
@@ -625,6 +637,34 @@ function JumpEditor({
           />
         </div>
       ))}
+    </div>
+  );
+}
+
+// Which experience levels see the question; at least one stays selected.
+function LevelPicker({ value, onChange }: { value: Level[]; onChange: (levels: Level[]) => void }) {
+  const t = useT();
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 md:ml-auto">
+      <span className="text-muted-foreground">{t("level.shownFor")}</span>
+      {LEVELS.map((l) => {
+        const on = value.includes(l);
+        return (
+          <button
+            key={l}
+            type="button"
+            aria-pressed={on}
+            disabled={on && value.length === 1}
+            onClick={() => onChange(on ? value.filter((x) => x !== l) : LEVELS.filter((x) => x === l || value.includes(x)))}
+            className={cn(
+              "rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors disabled:cursor-not-allowed",
+              on ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:border-primary/50",
+            )}
+          >
+            {t(`level.${l}`)}
+          </button>
+        );
+      })}
     </div>
   );
 }

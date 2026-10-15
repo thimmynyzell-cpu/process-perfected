@@ -5,6 +5,8 @@ import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useT } from "@/i18n";
+import { LEVELS, type Level } from "@/lib/levels";
+import { cn } from "@/lib/utils";
 import { canManage, logAudit, type AppRole } from "@/lib/auth";
 import { PLANS } from "@/lib/plans";
 import { OrgPage, Spinner, nativeSelect, type OrgContext } from "@/components/OrgPage";
@@ -75,6 +77,12 @@ function Team({ ctx }: { ctx: OrgContext }) {
     refresh();
   }
 
+  async function changeLevel(id: string, next: Level) {
+    const { error } = await supabase.from("org_members").update({ level: next }).eq("id", id);
+    if (error) toast.error(error.message);
+    refresh();
+  }
+
   async function removeMember(id: string) {
     const { error } = await supabase.from("org_members").delete().eq("id", id);
     if (error) toast.error(error.message);
@@ -139,26 +147,46 @@ function Team({ ctx }: { ctx: OrgContext }) {
                   </p>
                   <p className="truncate text-xs text-muted-foreground">{m.profile?.email}</p>
                 </div>
-                {isAdmin && m.user_id !== ctx.userId ? (
-                  <div className="flex items-center gap-2">
-                    <select
-                      className={`${nativeSelect} w-40`}
-                      value={m.role}
-                      onChange={(e) => changeRole(m.id, e.target.value as AppRole)}
-                    >
-                      {ROLES.map((r) => (
-                        <option key={r} value={r}>
-                          {t(`role.${r}`)}
-                        </option>
-                      ))}
-                    </select>
-                    <Button size="icon" variant="ghost" aria-label={t("team.remove")} onClick={() => removeMember(m.id)}>
-                      <Trash2 className="size-4 text-destructive" />
-                    </Button>
-                  </div>
-                ) : (
-                  <span className="text-sm text-muted-foreground">{t(`role.${m.role}`)}</span>
-                )}
+                <div className="flex items-center gap-2">
+                  {/* level is undefined until the levels migration has run */}
+                  {m.level !== undefined &&
+                    (isAdmin ? (
+                      <select
+                        className={cn(nativeSelect, "w-36 shrink-0")}
+                        aria-label={t("level.title")}
+                        value={m.level}
+                        onChange={(e) => changeLevel(m.id, e.target.value as Level)}
+                      >
+                        {LEVELS.map((l) => (
+                          <option key={l} value={l}>
+                            {t(`level.${l}`)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">{t(`level.${m.level}`)}</span>
+                    ))}
+                  {isAdmin && m.user_id !== ctx.userId ? (
+                    <div className="flex items-center gap-2">
+                      <select
+                        className={cn(nativeSelect, "w-40 shrink-0")}
+                        value={m.role}
+                        onChange={(e) => changeRole(m.id, e.target.value as AppRole)}
+                      >
+                        {ROLES.map((r) => (
+                          <option key={r} value={r}>
+                            {t(`role.${r}`)}
+                          </option>
+                        ))}
+                      </select>
+                      <Button size="icon" variant="ghost" aria-label={t("team.remove")} onClick={() => removeMember(m.id)}>
+                        <Trash2 className="size-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">{t(`role.${m.role}`)}</span>
+                  )}
+                </div>
               </li>
             ))}
           </ul>
