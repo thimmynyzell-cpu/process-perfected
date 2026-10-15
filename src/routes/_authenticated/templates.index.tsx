@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Archive, Copy, ListChecks, Pencil, Plus, RotateCcw, Trash2, Undo2 } from "lucide-react";
+import { Archive, Copy, ListChecks, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useT } from "@/i18n";
@@ -38,10 +38,11 @@ function Templates({ ctx }: { ctx: OrgContext }) {
   const t = useT();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<"active" | "archived">("active");
+  const [tab, setTab] = useState<"active" | "archived" | "trash">("active");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", category: "" });
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  // Checklists awaiting confirmation for permanent deletion.
+  const [purgeIds, setPurgeIds] = useState<string[] | null>(null);
   const manage = canManage(ctx.role);
 
   const templates = useQuery({
@@ -62,10 +63,11 @@ function Templates({ ctx }: { ctx: OrgContext }) {
 
   const all = (templates.data ?? []).filter((x) => !x.is_base);
   const base = templates.data?.find((x) => x.is_base);
-  const activeCount = all.filter((x) => x.status === "active").length;
+  const trash = all.filter((x) => x.delete_after);
+  const activeCount = all.filter((x) => x.status === "active" && !x.delete_after).length;
   const max = PLANS[ctx.organization.plan].maxTemplates;
   const atLimit = max !== null && activeCount >= max;
-  const shown = all.filter((x) => x.status === tab);
+  const shown = tab === "trash" ? trash : all.filter((x) => !x.delete_after && x.status === tab);
 
   const baseItems = useQuery({
     queryKey: ["template-items", base?.id],
@@ -178,23 +180,33 @@ function Templates({ ctx }: { ctx: OrgContext }) {
     qc.invalidateQueries({ queryKey: ["templates", ctx.orgId] });
   }
 
-  async function scheduleDelete(id: string) {
+  async function moveToTrash(id: string) {
     const deleteAfter = new Date(Date.now() + DELETE_GRACE_DAYS * DAY_MS).toISOString();
     const { error } = await supabase
       .from("templates")
       .update({ status: "archived", delete_after: deleteAfter })
       .eq("id", id);
     if (error) { toast.error(error.message); return; }
-    await logAudit(ctx.orgId, ctx.userId, "template.delete_scheduled", "template", id, { delete_after: deleteAfter });
-    toast.success(t("templates.deleteScheduled"));
+    await logAudit(ctx.orgId, ctx.userId, "template.trashed", "template", id, { delete_after: deleteAfter });
+    toast.success(t("templates.trashed"));
     qc.invalidateQueries({ queryKey: ["templates", ctx.orgId] });
   }
 
-  async function undoDelete(id: string) {
-    const { error } = await supabase.from("templates").update({ delete_after: null }).eq("id", id);
+  async function restoreFromTrash(id: string) {
+    // Back to active when the plan allows it, otherwise to archived.
+    const status = atLimit ? "archived" : "active";
+    const { error } = await supabase.from("templates").update({ status, delete_after: null }).eq("id", id);
     if (error) { toast.error(error.message); return; }
-    await logAudit(ctx.orgId, ctx.userId, "template.delete_undone", "template", id);
-    toast.success(t("templates.deleteUndone"));
+    await logAudit(ctx.orgId, ctx.userId, "template.restored", "template", id);
+    toast.success(t(status === "active" ? "templates.restored" : "templates.restoredArchived"));
+    qc.invalidateQueries({ queryKey: ["templates", ctx.orgId] });
+  }
+
+  async function purge(ids: string[]) {
+    const { error } = await supabase.from("templates").delete().in("id", ids);
+    if (error) { toast.error(error.message); return; }
+    for (const id of ids) await logAudit(ctx.orgId, ctx.userId, "template.deleted", "template", id);
+    toast.success(t("templates.purged", { count: ids.length }));
     qc.invalidateQueries({ queryKey: ["templates", ctx.orgId] });
   }
 
@@ -259,25 +271,53 @@ function Templates({ ctx }: { ctx: OrgContext }) {
         <TabsList>
           <TabsTrigger value="active">{t("templates.activeOnes")}</TabsTrigger>
           <TabsTrigger value="archived">{t("templates.archived")}</TabsTrigger>
+          <TabsTrigger value="trash" className="gap-1.5">
+            <Trash2 className="size-3.5" /> {t("templates.trash")}
+            {trash.length > 0 && (
+              <span className="rounded-full bg-destructive px-1.5 text-[11px] font-semibold leading-4 text-destructive-foreground">
+                {trash.length}
+              </span>
+            )}
+          </TabsTrigger>
         </TabsList>
       </Tabs>
+
+      {tab === "trash" && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+          {t("templates.trashHint")}
+          {manage && trash.length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setPurgeIds(trash.map((x) => x.id))}
+            >
+              <Trash2 className="size-4" /> {t("templates.emptyTrash")}
+            </Button>
+          )}
+        </div>
+      )}
 
       {templates.isPending ? (
         <Spinner />
       ) : shown.length === 0 ? (
-        <EmptyState>{t("templates.empty")}</EmptyState>
+        <EmptyState>{t(tab === "trash" ? "templates.trashEmpty" : "templates.empty")}</EmptyState>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {shown.map((tpl) => (
             <div key={tpl.id} className="flex flex-col rounded-xl border bg-card p-5 shadow-soft">
               <div className="flex items-start justify-between gap-2">
-                <Link
-                  to="/templates/$templateId"
-                  params={{ templateId: tpl.id }}
-                  className="font-semibold hover:text-primary"
-                >
-                  {tpl.title}
-                </Link>
+                {tpl.delete_after ? (
+                  <span className="font-semibold">{tpl.title}</span>
+                ) : (
+                  <Link
+                    to="/templates/$templateId"
+                    params={{ templateId: tpl.id }}
+                    className="font-semibold hover:text-primary"
+                  >
+                    {tpl.title}
+                  </Link>
+                )}
                 <span className="shrink-0 text-xs text-muted-foreground">v{tpl.current_version}</span>
               </div>
               {tpl.category && <p className="mt-1 text-xs font-medium text-primary">{tpl.category}</p>}
@@ -288,45 +328,59 @@ function Templates({ ctx }: { ctx: OrgContext }) {
               )}
               <p className="mt-2 line-clamp-2 flex-1 text-sm text-muted-foreground">{tpl.description}</p>
               <div className="mt-4 flex flex-wrap gap-2">
-                {tpl.status === "active" && (
-                  <Button asChild size="sm">
-                    <Link to="/runs/new" search={{ template: tpl.id }}>
-                      {t("run.start")}
-                    </Link>
-                  </Button>
-                )}
-                {manage && (
-                  <>
-                    <Button asChild size="sm" variant="outline">
-                      <Link to="/templates/$templateId" params={{ templateId: tpl.id }}>
-                        <Pencil className="size-4" /> {t("common.edit")}
-                      </Link>
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => duplicate(tpl.id)}>
-                      <Copy className="size-4" /> {t("common.duplicate")}
-                    </Button>
-                    {tpl.status === "active" ? (
-                      <Button size="sm" variant="ghost" onClick={() => setStatus(tpl.id, "archived")}>
-                        <Archive className="size-4" /> {t("common.archive")}
-                      </Button>
-                    ) : (
-                      <Button size="sm" variant="ghost" onClick={() => setStatus(tpl.id, "active")}>
+                {tpl.delete_after ? (
+                  manage && (
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => restoreFromTrash(tpl.id)}>
                         <RotateCcw className="size-4" /> {t("common.restore")}
                       </Button>
-                    )}
-                    {tpl.delete_after ? (
-                      <Button size="sm" variant="ghost" onClick={() => undoDelete(tpl.id)}>
-                        <Undo2 className="size-4" /> {t("templates.undoDelete")}
-                      </Button>
-                    ) : (
                       <Button
                         size="sm"
                         variant="ghost"
                         className="text-destructive hover:text-destructive"
-                        onClick={() => setDeleteId(tpl.id)}
+                        onClick={() => setPurgeIds([tpl.id])}
                       >
-                        <Trash2 className="size-4" /> {t("common.delete")}
+                        <Trash2 className="size-4" /> {t("templates.deleteNow")}
                       </Button>
+                    </>
+                  )
+                ) : (
+                  <>
+                    {tpl.status === "active" && (
+                      <Button asChild size="sm">
+                        <Link to="/runs/new" search={{ template: tpl.id }}>
+                          {t("run.start")}
+                        </Link>
+                      </Button>
+                    )}
+                    {manage && (
+                      <>
+                        <Button asChild size="sm" variant="outline">
+                          <Link to="/templates/$templateId" params={{ templateId: tpl.id }}>
+                            <Pencil className="size-4" /> {t("common.edit")}
+                          </Link>
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => duplicate(tpl.id)}>
+                          <Copy className="size-4" /> {t("common.duplicate")}
+                        </Button>
+                        {tpl.status === "active" ? (
+                          <Button size="sm" variant="ghost" onClick={() => setStatus(tpl.id, "archived")}>
+                            <Archive className="size-4" /> {t("common.archive")}
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="ghost" onClick={() => setStatus(tpl.id, "active")}>
+                            <RotateCcw className="size-4" /> {t("common.restore")}
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => moveToTrash(tpl.id)}
+                        >
+                          <Trash2 className="size-4" /> {t("common.delete")}
+                        </Button>
+                      </>
                     )}
                   </>
                 )}
@@ -336,22 +390,26 @@ function Templates({ ctx }: { ctx: OrgContext }) {
         </div>
       )}
 
-      <AlertDialog open={deleteId !== null} onOpenChange={(o) => !o && setDeleteId(null)}>
+      <AlertDialog open={purgeIds !== null} onOpenChange={(o) => !o && setPurgeIds(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("templates.deleteTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>{t("templates.deleteBody")}</AlertDialogDescription>
+            <AlertDialogDescription>
+              {purgeIds?.length === 1
+                ? t("templates.deleteBodyOne")
+                : t("templates.deleteBodyMany", { count: purgeIds?.length ?? 0 })}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
-                if (deleteId) scheduleDelete(deleteId);
-                setDeleteId(null);
+                if (purgeIds) purge(purgeIds);
+                setPurgeIds(null);
               }}
             >
-              {t("templates.deleteConfirm")}
+              {t("templates.deleteNow")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
