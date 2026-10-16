@@ -50,6 +50,13 @@
       "when": 1791440160120,
       "tag": "0006_levels",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791440260120,
+      "tag": "0007_base_per_category",
+      "breakpoints": true
     }
   ]
 }

@@ -1,13 +1,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Archive, Copy, ListChecks, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { Archive, Copy, Folder, FolderOpen, FolderPlus, Inbox, ListChecks, Pencil, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useT } from "@/i18n";
 import { canManage, logAudit } from "@/lib/auth";
 import { PLANS } from "@/lib/plans";
-import { pickItems } from "@/lib/items";
+import { cn } from "@/lib/utils";
+import { concatItems, folderOf, pickItems } from "@/lib/items";
 import { currentVersionId } from "@/lib/versions";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrgPage, Spinner, EmptyState, type OrgContext } from "@/components/OrgPage";
@@ -48,6 +49,11 @@ function Templates({ ctx }: { ctx: OrgContext }) {
   const [baseKeep, setBaseKeep] = useState<Set<string>>(new Set());
   // Checklists awaiting confirmation for permanent deletion.
   const [purgeIds, setPurgeIds] = useState<string[] | null>(null);
+  // Selected folder: ALL, NONE (no category) or a category name.
+  const [folder, setFolder] = useState<string>(ALL);
+  const [search, setSearch] = useState("");
+  // Folders created in this visit that have no checklists yet.
+  const [newFolders, setNewFolders] = useState<string[]>([]);
   const manage = canManage(ctx.role);
 
   const templates = useQuery({
@@ -67,18 +73,36 @@ function Templates({ ctx }: { ctx: OrgContext }) {
   });
 
   const all = (templates.data ?? []).filter((x) => !x.is_base);
-  const base = templates.data?.find((x) => x.is_base);
+  const bases = (templates.data ?? []).filter((x) => x.is_base);
+  const baseFor = (category: string) => bases.find((b) => folderOf(b.category) === category);
+  const folders = [...new Set([...all, ...bases].map((x) => folderOf(x.category)).filter(Boolean).concat(newFolders))].sort(
+    (a, b) => a.localeCompare(b, "sv"),
+  );
   const trash = all.filter((x) => x.delete_after);
   const activeCount = all.filter((x) => x.status === "active" && !x.delete_after).length;
   const max = PLANS[ctx.organization.plan].maxTemplates;
   const atLimit = max !== null && activeCount >= max;
-  const shown = tab === "trash" ? trash : all.filter((x) => !x.delete_after && x.status === tab);
+  const inTab = tab === "trash" ? trash : all.filter((x) => !x.delete_after && x.status === tab);
+  const inFolder = (x: { category: string | null }) =>
+    folder === ALL || (folder === NONE ? !folderOf(x.category) : folderOf(x.category) === folder);
+  const query = search.trim().toLowerCase();
+  const matches = (x: { title: string; description: string | null; category: string | null }) =>
+    !query || [x.title, x.description, x.category].some((v) => v?.toLowerCase().includes(query));
+  // Searching looks in every folder, so a checklist is found wherever it lives.
+  const shown = inTab.filter((x) => (query ? true : inFolder(x)) && matches(x));
+  const countIn = (f: string) =>
+    inTab.filter((x) => (f === ALL ? true : f === NONE ? !folderOf(x.category) : folderOf(x.category) === f)).length;
 
+  // Items of every base checklist, keyed by base id.
   const baseItems = useQuery({
-    queryKey: ["template-items", base?.id],
-    enabled: !!base,
-    queryFn: async () => latestItems(base!),
+    queryKey: ["base-items", bases.map((b) => `${b.id}:${b.current_version}`).join(",")],
+    enabled: bases.length > 0,
+    queryFn: async () =>
+      Object.fromEntries(await Promise.all(bases.map(async (b) => [b.id, await latestItems(b)] as const))),
   });
+  // Base checklists that apply to a new checklist in `category`: the general one, then the folder's own.
+  const basesFor = (category: string) =>
+    [baseFor(""), category ? baseFor(category) : undefined].filter((b): b is NonNullable<typeof b> => !!b);
 
   async function latestItems(tpl: { id: string; current_version: number }) {
     const verId = await currentVersionId(tpl.id, tpl.current_version);
@@ -88,13 +112,23 @@ function Templates({ ctx }: { ctx: OrgContext }) {
     return data;
   }
 
-  async function createBase() {
+  async function createBase(category: string) {
     const { data: tpl, error } = await supabase
       .from("templates")
-      .insert({ org_id: ctx.orgId, title: t("templates.base"), is_base: true, created_by: ctx.userId })
+      .insert({
+        org_id: ctx.orgId,
+        title: category ? `${t("templates.base")} – ${category}` : t("templates.base"),
+        category: category || null,
+        is_base: true,
+        created_by: ctx.userId,
+      })
       .select()
       .single();
-    if (error) { toast.error(error.message); return; }
+    if (error) {
+      // Before the per-category migration only one base checklist is allowed.
+      toast.error(error.code === "23505" ? t("templates.baseNeedsMigration") : error.message);
+      return;
+    }
     await supabase
       .from("template_versions")
       .insert({ template_id: tpl.id, org_id: ctx.orgId, version: 1, created_by: ctx.userId });
@@ -102,8 +136,13 @@ function Templates({ ctx }: { ctx: OrgContext }) {
     navigate({ to: "/templates/$templateId", params: { templateId: tpl.id } });
   }
 
+  const keepAllFor = (category: string) =>
+    new Set(basesFor(category).flatMap((b) => (baseItems.data?.[b.id] ?? []).map((i) => i.id)));
+
   function openCreate() {
-    setBaseKeep(new Set((baseItems.data ?? []).map((i) => i.id)));
+    const category = folder === ALL || folder === NONE ? "" : folder;
+    setForm({ title: "", description: "", category });
+    setBaseKeep(keepAllFor(category));
     setOpen(true);
   }
 
@@ -111,7 +150,7 @@ function Templates({ ctx }: { ctx: OrgContext }) {
     e.preventDefault();
     const { data: tpl, error } = await supabase
       .from("templates")
-      .insert({ org_id: ctx.orgId, ...form, created_by: ctx.userId })
+      .insert({ org_id: ctx.orgId, ...form, category: folderOf(form.category) || null, created_by: ctx.userId })
       .select()
       .single();
     if (error) { toast.error(error.message); return; }
@@ -120,9 +159,10 @@ function Templates({ ctx }: { ctx: OrgContext }) {
       .insert({ template_id: tpl.id, org_id: ctx.orgId, version: 1, created_by: ctx.userId })
       .select()
       .single();
-    // Start the new checklist with the chosen questions from the base checklist.
-    if (base && ver && baseKeep.size) {
-      const items = pickItems(await latestItems(base), baseKeep);
+    // Start the new checklist with the chosen questions from its base checklists.
+    if (ver && baseKeep.size) {
+      let items: Awaited<ReturnType<typeof latestItems>> = [];
+      for (const b of basesFor(folderOf(form.category))) items = concatItems(items, pickItems(await latestItems(b), baseKeep));
       if (items.length) {
         await supabase.from("template_items").insert(
           items.map(({ id: _id, version_id: _v, ...rest }) => ({ ...rest, version_id: ver.id })),
@@ -235,33 +275,82 @@ function Templates({ ctx }: { ctx: OrgContext }) {
         </div>
       )}
 
-      {manage && (
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/5 p-5">
-          <div className="flex items-start gap-3">
-            <ListChecks className="mt-0.5 size-5 shrink-0 text-primary" />
-            <div>
-              <p className="font-semibold">
-                {t("templates.base")}
-                {base && baseItems.data && (
-                  <span className="ml-2 text-xs font-normal text-muted-foreground">
-                    {t("templates.baseItems", { count: baseItems.data.length })}
-                  </span>
-                )}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">{t("templates.baseDesc")}</p>
-            </div>
+      <div className="grid gap-6 md:grid-cols-[15rem_1fr]">
+        <aside className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+            <Input
+              className="pl-8"
+              placeholder={t("templates.search")}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
-          {base ? (
-            <Button asChild size="sm" variant="outline">
-              <Link to="/templates/$templateId" params={{ templateId: base.id }}>
-                <Pencil className="size-4" /> {t("common.edit")}
-              </Link>
-            </Button>
-          ) : (
-            <Button size="sm" variant="outline" onClick={createBase}>
-              <Plus className="size-4" /> {t("templates.baseCreate")}
+          <nav className="space-y-0.5" aria-label={t("templates.folders")}>
+            <FolderButton icon={<ListChecks className="size-4" />} label={t("templates.allFolders")} count={countIn(ALL)} active={folder === ALL} onClick={() => setFolder(ALL)} />
+            {folders.map((f) => (
+              <FolderButton
+                key={f}
+                icon={folder === f ? <FolderOpen className="size-4" /> : <Folder className="size-4" />}
+                label={f}
+                count={countIn(f)}
+                active={folder === f}
+                onClick={() => setFolder(f)}
+              />
+            ))}
+            {countIn(NONE) > 0 && (
+              <FolderButton icon={<Inbox className="size-4" />} label={t("templates.noFolder")} count={countIn(NONE)} active={folder === NONE} onClick={() => setFolder(NONE)} />
+            )}
+          </nav>
+          {manage && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="w-full justify-start text-muted-foreground"
+              onClick={() => {
+                const name = window.prompt(t("templates.newFolderPrompt"))?.trim();
+                if (!name) return;
+                if (!folders.includes(name)) setNewFolders((l) => [...l, name]);
+                setFolder(name);
+              }}
+            >
+              <FolderPlus className="size-4" /> {t("templates.newFolder")}
             </Button>
           )}
+        </aside>
+
+        <div className="min-w-0">
+      {manage && !query && (
+        <div className="mb-6 space-y-2 rounded-xl border border-primary/30 bg-primary/5 p-4">
+          <p className="flex items-center gap-2 font-semibold">
+            <ListChecks className="size-5 text-primary" /> {t("templates.base")}
+          </p>
+          <p className="text-sm text-muted-foreground">{t("templates.baseDesc")}</p>
+          <ul className="space-y-1.5">
+            {(folder === ALL ? ["", ...folders] : folder === NONE ? [""] : ["", folder]).map((f) => {
+              const b = baseFor(f);
+              const n = b ? baseItems.data?.[b.id]?.length : undefined;
+              return (
+                <li key={f || "general"} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-card px-3 py-2 text-sm">
+                  <span>
+                    {f ? t("templates.baseForFolder", { folder: f }) : t("templates.baseGeneral")}
+                    {n !== undefined && <span className="ml-2 text-xs text-muted-foreground">{t("templates.baseItems", { count: n })}</span>}
+                  </span>
+                  {b ? (
+                    <Button asChild size="sm" variant="outline">
+                      <Link to="/templates/$templateId" params={{ templateId: b.id }}>
+                        <Pencil className="size-4" /> {t("common.edit")}
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => createBase(f)}>
+                      <Plus className="size-4" /> {t("templates.baseCreate")}
+                    </Button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 
@@ -387,6 +476,8 @@ function Templates({ ctx }: { ctx: OrgContext }) {
           ))}
         </div>
       )}
+        </div>
+      </div>
 
       <AlertDialog open={purgeIds !== null} onOpenChange={(o) => !o && setPurgeIds(null)}>
         <AlertDialogContent>
@@ -431,7 +522,21 @@ function Templates({ ctx }: { ctx: OrgContext }) {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="cat">{t("templates.category")}</Label>
-              <Input id="cat" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+              <Input
+                id="cat"
+                list="folder-list"
+                placeholder={t("templates.folderPlaceholder")}
+                value={form.category}
+                onChange={(e) => {
+                  setForm({ ...form, category: e.target.value });
+                  setBaseKeep(keepAllFor(folderOf(e.target.value)));
+                }}
+              />
+              <datalist id="folder-list">
+                {folders.map((f) => (
+                  <option key={f} value={f} />
+                ))}
+              </datalist>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="desc">{t("templates.description")}</Label>
@@ -441,13 +546,15 @@ function Templates({ ctx }: { ctx: OrgContext }) {
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
             </div>
-            {base && !!baseItems.data?.length && (
-              <BasePicker
-                items={baseItems.data}
-                keep={baseKeep}
-                onChange={setBaseKeep}
-              />
-            )}
+            {(() => {
+              const groups = basesFor(folderOf(form.category))
+                .map((b) => ({
+                  title: folderOf(b.category) ? t("templates.baseForFolder", { folder: folderOf(b.category) }) : t("templates.baseGeneral"),
+                  items: baseItems.data?.[b.id] ?? [],
+                }))
+                .filter((g) => g.items.length);
+              return groups.length ? <BasePicker groups={groups} keep={baseKeep} onChange={setBaseKeep} /> : null;
+            })()}
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
                 {t("common.cancel")}
@@ -461,19 +568,53 @@ function Templates({ ctx }: { ctx: OrgContext }) {
   );
 }
 
+const ALL = "\u0000all";
+const NONE = "\u0000none";
+
+function FolderButton({
+  icon,
+  label,
+  count,
+  active,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? "true" : undefined}
+      className={cn(
+        "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors",
+        active ? "bg-primary/10 font-medium text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      )}
+    >
+      {icon}
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="text-xs tabular-nums">{count}</span>
+    </button>
+  );
+}
+
 // Choose which base checklist questions a new checklist starts with.
 function BasePicker({
-  items,
+  groups,
   keep,
   onChange,
 }: {
-  items: { id: string; label: string; position: number }[];
+  groups: { title: string; items: { id: string; label: string; position: number }[] }[];
   keep: Set<string>;
   onChange: (keep: Set<string>) => void;
 }) {
   const t = useT();
-  const sorted = [...items].sort((a, b) => a.position - b.position);
-  const allOn = keep.size === items.length;
+  const items = groups.flatMap((g) => g.items);
+  const allOn = items.every((i) => keep.has(i.id));
+  const chosen = items.filter((i) => keep.has(i.id)).length;
   const toggle = (id: string, on: boolean) => {
     const next = new Set(keep);
     if (on) next.add(id);
@@ -484,21 +625,30 @@ function BasePicker({
     <div className="space-y-2 rounded-lg border p-3">
       <label className="flex items-center gap-2 text-sm font-medium">
         <Checkbox
-          checked={allOn ? true : keep.size ? "indeterminate" : false}
+          checked={allOn ? true : chosen ? "indeterminate" : false}
           onCheckedChange={() => onChange(allOn ? new Set() : new Set(items.map((i) => i.id)))}
         />
-        {t("templates.baseInclude", { count: keep.size, total: items.length })}
+        {t("templates.baseInclude", { count: chosen, total: items.length })}
       </label>
-      <ul className="max-h-48 space-y-1.5 overflow-y-auto pl-6">
-        {sorted.map((i) => (
-          <li key={i.id}>
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox checked={keep.has(i.id)} onCheckedChange={(v) => toggle(i.id, v === true)} />
-              {i.label}
-            </label>
-          </li>
+      <div className="max-h-56 space-y-3 overflow-y-auto pl-6">
+        {groups.map((g) => (
+          <div key={g.title}>
+            {groups.length > 1 && <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{g.title}</p>}
+            <ul className="space-y-1.5">
+              {[...g.items]
+                .sort((a, b) => a.position - b.position)
+                .map((i) => (
+                  <li key={i.id}>
+                    <label className="flex items-center gap-2 text-sm">
+                      <Checkbox checked={keep.has(i.id)} onCheckedChange={(v) => toggle(i.id, v === true)} />
+                      {i.label}
+                    </label>
+                  </li>
+                ))}
+            </ul>
+          </div>
         ))}
-      </ul>
+      </div>
     </div>
   );
 }

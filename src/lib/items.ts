@@ -49,3 +49,28 @@ export function reorder<T extends { key: string }>(
   rest.splice(after ? at + 1 : at, 0, moving);
   return rest;
 }
+
+/** Appends `b` after `a`, shifting b's positions and the positions its conditions and jumps refer to. */
+export function concatItems<T extends ItemRow>(a: T[], b: T[]): T[] {
+  const offset = a.length;
+  const shifted = b.map((i) => {
+    const out: T = {
+      ...i,
+      position: i.position + offset,
+      parent_position: i.parent_position != null ? i.parent_position + offset : null,
+    };
+    if (i.jump_to && typeof i.jump_to === "object") {
+      out.jump_to = Object.fromEntries(
+        Object.entries(i.jump_to).map(([v, pos]) => [
+          v,
+          typeof pos === "number" ? pos + offset : pos,
+        ]),
+      );
+    }
+    return out;
+  });
+  return [...a, ...shifted];
+}
+
+/** Folder name for a checklist's category; empty means no folder. */
+export const folderOf = (category: string | null | undefined) => (category ?? "").trim();

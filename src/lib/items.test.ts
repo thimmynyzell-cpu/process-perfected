@@ -1,4 +1,4 @@
-import { pickItems, reorder } from "./items";
+import { concatItems, pickItems, reorder } from "./items";
 
 const item = (id: string, position: number, extra = {}) => ({
   id,
@@ -45,5 +45,24 @@ describe("reorder", () => {
     expect(keys(reorder(list, "a", "c", true))).toBe("bcad");
     expect(keys(reorder(list, "d", "a", false))).toBe("dabc");
     expect(keys(reorder(list, "b", "b", true))).toBe("abcd");
+  });
+});
+
+describe("concatItems", () => {
+  it("shifts positions, conditions and jumps of the second list", () => {
+    const a = pickItems([item("a", 0), item("b", 1)], new Set(["a", "b"]));
+    const b = pickItems(
+      [item("c", 0, { jump_to: { Ja: 1 } }), item("d", 1, { parent_position: 0, show_when: "Ja" })],
+      new Set(["c", "d"]),
+    );
+    const out = concatItems(a, b);
+    expect(out.map((i) => [i.id, i.position])).toEqual([
+      ["a", 0],
+      ["b", 1],
+      ["c", 2],
+      ["d", 3],
+    ]);
+    expect(out[2]!.jump_to).toEqual({ Ja: 3 });
+    expect(out[3]).toMatchObject({ parent_position: 2, show_when: "Ja" });
   });
 });
