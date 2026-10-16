@@ -52,9 +52,13 @@ export type Lane = {
  * Splits the questions after a question with jumps into one lane per jump
  * target, plus a lane for answers without a jump when questions come before
  * the first target. A lane runs until the next lane starts; all lanes meet
- * again at `merge`, the end of the last target's section (or `bound`).
+ * again at `merge`: the question stored under MERGE in the jumps, else the
+ * end of the last target's section (or `bound`).
  * Returns null for a question without usable jumps.
  */
+/** Key in a question's jumps naming the question where its branches meet. */
+export const MERGE = "__merge";
+
 export function lanesOf(
   nodes: { key: string; section?: string | null; jumps?: Record<string, string> }[],
   idx: number,
@@ -65,6 +69,7 @@ export function lanesOf(
   const indexOf = new Map(nodes.map((x, i) => [x.key, i]));
   const byTarget = new Map<number, string[]>();
   for (const [v, key] of Object.entries(n.jumps)) {
+    if (v === MERGE) continue;
     const target = indexOf.get(key);
     if (target === undefined || target <= idx || target >= bound) continue;
     byTarget.set(target, [...(byTarget.get(target) ?? []), v]);
@@ -73,8 +78,11 @@ export function lanesOf(
   const starts = [...byTarget.keys()].sort((a, b) => a - b);
   const last = starts.at(-1)!;
   const section = (i: number) => (nodes[i]?.section ?? "").trim();
+  // Branches meet at the question set as merge point, else at the end of the last branch's section.
+  const explicit = n.jumps[MERGE] !== undefined ? indexOf.get(n.jumps[MERGE]!) : undefined;
   let merge = last + 1;
-  while (merge < bound && section(merge) === section(last)) merge++;
+  if (explicit !== undefined && explicit > last && explicit <= bound) merge = explicit;
+  else while (merge < bound && section(merge) === section(last)) merge++;
   const lanes: Lane[] = [];
   if (starts[0]! > idx + 1) lanes.push({ values: [], start: idx + 1, end: starts[0]! });
   starts.forEach((start, k) =>

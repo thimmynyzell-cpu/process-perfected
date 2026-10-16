@@ -100,3 +100,18 @@ describe("lanesOf", () => {
     expect([...visibleKeys(nodes, { q4: "B" })]).toEqual(["q4", "q8", "q9", "q10"]);
   });
 });
+
+describe("merge point", () => {
+  it("ends the branches at the question set as merge point", () => {
+    const n = [
+      node("q", { type: "dropdown", options: ["A", "B"], jumps: { A: "a", B: "b", __merge: "m" } }),
+      node("a"),
+      node("b"),
+      node("m"),
+      node("z"),
+    ];
+    expect(lanesOf(n, 0)?.merge).toBe(3);
+    expect([...visibleKeys(n, { q: "A" })]).toEqual(["q", "a", "m", "z"]);
+    expect([...visibleKeys(n, { q: "B" })]).toEqual(["q", "b", "m", "z"]);
+  });
+});

@@ -61,7 +61,7 @@ function NodeView({ node, all, onSelect }: { node: FlowNode; all: FlowNode[]; on
         </p>
         <p className="text-xs text-muted-foreground">{t(`itemType.${node.type}` as never)}</p>
       </div>
-      {Object.entries(node.jumps ?? {}).map(([v, key]) => {
+      {Object.entries(node.jumps ?? {}).filter(([v]) => v !== "__merge").map(([v, key]) => {
         const idx = all.findIndex((x) => x.key === key);
         if (idx < 0) return null;
         return (

@@ -5,6 +5,7 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowUp,
+  ChevronDown,
   Copy,
   CornerDownRight,
   GitBranch,
@@ -20,7 +21,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { FlowTree } from "@/components/FlowTree";
 import { OptionRows } from "@/components/OptionRows";
 import { Hint } from "@/components/Hint";
-import { branchValues, jumpKeys, lanesOf, type FlowNode } from "@/lib/flow";
+import { MERGE, branchValues, jumpKeys, lanesOf, type FlowNode } from "@/lib/flow";
 import { LEVELS, type Level } from "@/lib/levels";
 import { sectionOrder } from "@/lib/sections";
 import { laneColors, type LaneColor } from "@/lib/laneColors";
@@ -176,6 +177,15 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   const [dragArmed, setDragArmed] = useState<string | null>(null);
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [dropAt, setDropAt] = useState<{ key: string; after: boolean } | null>(null);
+  // Branches shown in full; the others show only their heading.
+  const [openLanes, setOpenLanes] = useState<Set<string>>(new Set());
+  const toggleLane = (id: string, open?: boolean) =>
+    setOpenLanes((s) => {
+      const next = new Set(s);
+      if (open ?? !next.has(id)) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   const jumpToItem = (key: string) => {
     setFlowOpen(false);
@@ -300,6 +310,28 @@ function Editor({ ctx }: { ctx: OrgContext }) {
     setItems((list) => [...list.slice(0, at), item, ...list.slice(at)]);
     jumpToItem(item.key);
   };
+  /**
+   * Adds a question right below the one with key `key`. Below a question with
+   * branches it goes after them, where they meet, and becomes the new merge
+   * point so the flow continues straight down.
+   */
+  const addBelow = (key: string) => {
+    const item = newItem("");
+    setItems((list) => {
+      const idx = list.findIndex((i) => i.key === key);
+      if (idx < 0) return list;
+      const owner = list[idx]!;
+      item.section = owner.section;
+      const split = lanesOf(list.map((i) => ({ key: i.key, section: i.section, jumps: i.jumps })), idx);
+      const at = split ? split.merge : idx + 1;
+      const next = [...list.slice(0, at), item, ...list.slice(at)];
+      return split
+        ? next.map((i) => (i.key === owner.key ? { ...i, jumps: { ...i.jumps, [MERGE]: item.key } } : i))
+        : next;
+    });
+    jumpToItem(item.key);
+  };
+
   const add = () =>
     setItems((list) => {
       const item = newItem(chapter || (list.at(-1)?.section ?? ""));
@@ -371,7 +403,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         jump_to: Object.fromEntries(
           Object.entries(i.jumps).flatMap(([v, key]) => {
             const target = keyPos.get(key);
-            const valid = branchValues(i.type, optList(i.options)).includes(v);
+            const valid = v === MERGE || branchValues(i.type, optList(i.options)).includes(v);
             return valid && target !== undefined && target > position ? [[v, target]] : [];
           }),
         ),
@@ -693,27 +725,51 @@ function Editor({ ctx }: { ctx: OrgContext }) {
     color: LaneColor,
     owner: DraftItem,
     depth: number,
-  ) => (
-    <section className={cn("w-max rounded-xl border-2 border-dashed p-3", color.border, color.bg)}>
-      <p className={cn("mb-2 flex items-center gap-1.5 text-xs font-semibold", color.text)}>
+  ) => {
+    const id = `${owner.key}:${items[l.start]?.key ?? l.start}`;
+    const open = openLanes.has(id);
+    const header = (
+      <span className={cn("flex items-center gap-1.5 text-xs font-semibold", color.text)}>
         <span className={cn("size-2.5 rounded-full", color.dot)} />
         {t("flow.if")} {laneLabel(l.values)}
         <span className="font-normal text-muted-foreground">· {t("flow.laneCount", { count: l.end - l.start })}</span>
-      </p>
-      <ol className="space-y-4">{renderRange(l.start, l.end, depth + 1)}</ol>
-      {manage && (
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="mt-2"
-          onClick={() => addAt(l.end, items[l.end - 1]?.section ?? owner.section)}
-        >
-          <Plus className="size-4" /> {t("flow.addInLane")}
-        </Button>
-      )}
-    </section>
-  );
+        <ChevronDown className={cn("size-3.5 transition-transform", !open && "-rotate-90")} />
+      </span>
+    );
+    if (!open) {
+      // Collapsed: only the heading, click to open the branch.
+      return (
+        <Hint text={t("flow.openLane")}>
+          <button
+            type="button"
+            onClick={() => toggleLane(id, true)}
+            className={cn("rounded-xl border-2 border-dashed px-3 py-2 text-left hover:shadow-soft", color.border, color.bg)}
+          >
+            {header}
+          </button>
+        </Hint>
+      );
+    }
+    return (
+      <section className={cn("w-max rounded-xl border-2 border-dashed p-3", color.border, color.bg)}>
+        <button type="button" className="mb-2" onClick={() => toggleLane(id, false)} aria-expanded>
+          {header}
+        </button>
+        <ol className="space-y-4">{renderRange(l.start, l.end, depth + 1)}</ol>
+        {manage && (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="mt-2"
+            onClick={() => addAt(l.end, items[l.end - 1]?.section ?? owner.section)}
+          >
+            <Plus className="size-4" /> {t("flow.addInLane")}
+          </Button>
+        )}
+      </section>
+    );
+  };
 
   /**
    * One side of a branching question: its branches side by side, hung from a
@@ -748,6 +804,28 @@ function Editor({ ctx }: { ctx: OrgContext }) {
     </div>
   );
 
+  /** A small "+" under a card that adds the next question straight below it. */
+  const addBelowRow = (item: DraftItem) => (
+    <li key={`${item.key}-below`} data-add-below className="-my-2 grid grid-cols-[1fr_auto_1fr]">
+      <div />
+      <div className="flex flex-col items-center">
+        <span className="h-2 w-0.5 bg-muted-foreground/30" />
+        <Hint text={t("flow.addBelowHint")}>
+          <button
+            type="button"
+            aria-label={t("flow.addBelow")}
+            onClick={() => addBelow(item.key)}
+            className="flex size-6 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-soft hover:border-primary hover:text-primary"
+          >
+            <Plus className="size-3.5" />
+          </button>
+        </Hint>
+        <span className="h-2 w-0.5 bg-muted-foreground/30" />
+      </div>
+      <div />
+    </li>
+  );
+
   const renderRange = (from: number, to: number, depth: number): React.ReactNode[] => {
     const out: React.ReactNode[] = [];
     let i = from;
@@ -768,6 +846,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
             <div />
           </li>,
         );
+        if (manage && !focusKey) out.push(addBelowRow(item));
         i++;
         continue;
       }
@@ -783,6 +862,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
           <div className="justify-self-start">{laneGroup(right, "right", item, depth)}</div>
         </li>,
       );
+      if (manage) out.push(addBelowRow(item));
       i = split.merge;
     }
     return out;
