@@ -12,6 +12,8 @@ import {
   Network,
   Plus,
   Trash2,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FlowTree } from "@/components/FlowTree";
@@ -20,6 +22,7 @@ import { Hint } from "@/components/Hint";
 import { branchValues, jumpKeys, lanesOf, type FlowNode } from "@/lib/flow";
 import { LEVELS, type Level } from "@/lib/levels";
 import { sectionOrder } from "@/lib/sections";
+import { laneColors, type LaneColor } from "@/lib/laneColors";
 import { currentVersionId, writeVersion } from "@/lib/versions";
 import { applyBaseChange, folderOf, reorder } from "@/lib/items";
 import { toast } from "sonner";
@@ -87,6 +90,23 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   const [saving, setSaving] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
   const [defaultLevels, setDefaultLevels] = useDefaultLevels();
+  const [zoom, setZoom] = useZoom();
+  // Ctrl/⌘ + scroll zooms the tree. Attached natively since React's wheel
+  // listener is passive and can't stop the browser from zooming the page.
+  const treeRef = useRef<HTMLOListElement>(null);
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
+  useEffect(() => {
+    const el = treeRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      setZoom(zoomRef.current - Math.sign(e.deltaY) * ZOOM_STEP);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  });
   // Section shown in the editor ("" = all), and sections added but not used yet.
   const [chapter, setChapter] = useState("");
   const [extraSections, setExtraSections] = useState<string[]>([]);
@@ -353,8 +373,17 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   const laneLabel = (values: string[]) =>
     values.length ? values.map(yesNo).join(" / ") : t("flow.otherAnswers");
 
+  /** Color of the branch each answer of the question at `idx` leads into. */
+  const answerColors = (idx: number): Record<string, LaneColor> => {
+    const split = lanesOf(laneNodes, idx);
+    if (!split) return {};
+    const colors = laneColors(split.lanes);
+    return Object.fromEntries(split.lanes.flatMap((l, k) => l.values.map((v) => [v, colors[k]!] as const)));
+  };
+
   const renderCard = (item: DraftItem) => {
     const idx = items.findIndex((i) => i.key === item.key);
+    const colors = answerColors(idx);
     return (
             <div
               key={item.key}
@@ -459,6 +488,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                       value={item.options}
                       onChange={(options) => update(idx, { options })}
                       onRename={(from, to) => update(idx, { jumps: renameJump(item.jumps, from, to) })}
+                      rowClass={(option) => (colors[option] ? cn("border-l-4 pl-2", colors[option].bar) : undefined)}
                       extra={(option) =>
                         option && idx < items.length - 1 ? (
                           <JumpSelect
@@ -521,6 +551,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                     later={items.slice(idx + 1)}
                     number={(key) => items.findIndex((x) => x.key === key) + 1}
                     yesNo={yesNo}
+                    colors={colors}
                     onChange={(jumps) => update(idx, { jumps })}
                   />
                   <div className="flex flex-wrap items-center gap-4 text-sm @sm:col-span-2 @2xl:col-span-3">
@@ -612,33 +643,51 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         i++;
         continue;
       }
+      // Branches alternate sides: the first to the right, the second to the left, and so on.
+      const colors = laneColors(split.lanes);
+      const lane = (l: (typeof split.lanes)[number], k: number) => (
+        <section
+          key={l.start}
+          className={cn("rounded-xl border-2 border-dashed p-3", colors[k]!.border, colors[k]!.bg)}
+        >
+          <p className={cn("mb-2 flex items-center gap-1.5 text-xs font-semibold", colors[k]!.text)}>
+            <span className={cn("size-2.5 rounded-full", colors[k]!.dot)} />
+            {t("flow.if")} {laneLabel(l.values)}
+            <span className="font-normal text-muted-foreground">
+              · {t("flow.laneCount", { count: l.end - l.start })}
+            </span>
+          </p>
+          <ol className="space-y-3">{renderRange(l.start, l.end, depth + 1)}</ol>
+          {manage && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="mt-2"
+              onClick={() => addAt(l.end, items[l.end - 1]?.section ?? item.section)}
+            >
+              <Plus className="size-4" /> {t("flow.addInLane")}
+            </Button>
+          )}
+        </section>
+      );
+      const right = split.lanes.map((l, k) => [l, k] as const).filter(([, k]) => k % 2 === 0);
+      const left = split.lanes.map((l, k) => [l, k] as const).filter(([, k]) => k % 2 === 1);
       out.push(
-        <li key={item.key} className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          {renderCard(item)}
-          <div className="space-y-3 border-l-2 border-primary/30 pl-3">
-            {split.lanes.map((lane) => (
-              <section key={lane.start} className="rounded-xl border border-dashed border-primary/40 bg-primary/5 p-3">
-                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-primary">
-                  <GitBranch className="size-3.5" /> {t("flow.if")} {laneLabel(lane.values)}
-                  <span className="font-normal text-muted-foreground">
-                    · {t("flow.laneCount", { count: lane.end - lane.start })}
-                  </span>
-                </p>
-                <ol className="space-y-3">{renderRange(lane.start, lane.end, depth + 1)}</ol>
-                {manage && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="mt-2"
-                    onClick={() => addAt(lane.end, items[lane.end - 1]?.section ?? item.section)}
-                  >
-                    <Plus className="size-4" /> {t("flow.addInLane")}
-                  </Button>
-                )}
-              </section>
-            ))}
-          </div>
+        <li
+          key={item.key}
+          className={cn(
+            "grid items-start gap-3",
+            left.length
+              ? "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]"
+              : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]",
+          )}
+        >
+          {left.length > 0 && (
+            <div className="order-2 space-y-3 xl:order-1">{left.map(([l, k]) => lane(l, k))}</div>
+          )}
+          <div className="order-1 xl:order-2">{renderCard(item)}</div>
+          <div className="order-3 space-y-3">{right.map(([l, k]) => lane(l, k))}</div>
         </li>,
       );
       i = split.merge;
@@ -728,6 +777,26 @@ function Editor({ ctx }: { ctx: OrgContext }) {
           {chapter && (
             <span className="text-xs text-muted-foreground">{t("section.filtered", { count: items.length - shownItems.length })}</span>
           )}
+          <div className="ml-auto flex items-center gap-1" role="group" aria-label={t("zoom.title")}>
+            <Hint text={t("zoom.outHint")}>
+              <Button type="button" size="icon" variant="ghost" aria-label={t("zoom.out")} onClick={() => setZoom(zoom - ZOOM_STEP)} disabled={zoom <= ZOOM_MIN}>
+                <ZoomOut className="size-4" />
+              </Button>
+            </Hint>
+            <button
+              type="button"
+              className="w-12 rounded px-1 text-center text-xs tabular-nums text-muted-foreground hover:bg-muted"
+              title={t("zoom.reset")}
+              onClick={() => setZoom(1)}
+            >
+              {Math.round(zoom * 100)} %
+            </button>
+            <Hint text={t("zoom.inHint")}>
+              <Button type="button" size="icon" variant="ghost" aria-label={t("zoom.in")} onClick={() => setZoom(zoom + ZOOM_STEP)} disabled={zoom >= ZOOM_MAX}>
+                <ZoomIn className="size-4" />
+              </Button>
+            </Hint>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -760,7 +829,14 @@ function Editor({ ctx }: { ctx: OrgContext }) {
           </div>
         )}
 
-        <ol className="space-y-3">{renderRange(0, items.length, 0)}</ol>
+        <ol
+          className="space-y-3"
+          // zoom scales layout too, so a zoomed-out tree takes less room instead of just shrinking
+          style={{ zoom }}
+          ref={treeRef}
+        >
+          {renderRange(0, items.length, 0)}
+        </ol>
 
         {manage && (
           <Button type="button" variant="outline" onClick={add}>
@@ -853,12 +929,14 @@ function JumpEditor({
   later,
   number,
   yesNo,
+  colors,
   onChange,
 }: {
   item: DraftItem;
   later: DraftItem[];
   number: (key: string) => number;
   yesNo: (v: string) => string;
+  colors: Record<string, LaneColor>;
   onChange: (jumps: Record<string, string>) => void;
 }) {
   const t = useT();
@@ -885,7 +963,10 @@ function JumpEditor({
       {values.map((v) => (
         <div key={v} className="flex flex-wrap items-center gap-2">
           <span className="text-muted-foreground">{t("flow.if")}</span>
-          <span className="rounded bg-primary/10 px-1.5 py-0.5 text-primary">{yesNo(v)}</span>
+          <span className="inline-flex items-center gap-1.5 rounded bg-primary/10 px-1.5 py-0.5 text-primary">
+            {colors[v] && <span className={cn("size-2.5 rounded-full", colors[v].dot)} />}
+            {yesNo(v)}
+          </span>
           <span className="text-muted-foreground">{t("flow.goTo")}</span>
           <JumpSelect
             defaultOpen
@@ -944,6 +1025,33 @@ function LevelPicker({
 }
 
 const ADD_SECTION = "\u0000add";
+
+const ZOOM_KEY = "checklista.editorZoom";
+const ZOOM_MIN = 0.4;
+const ZOOM_MAX = 1.3;
+const ZOOM_STEP = 0.1;
+
+/** Editor tree zoom, remembered per browser. */
+function useZoom() {
+  const [zoom, setZoomState] = useState(() => {
+    try {
+      const z = Number(localStorage.getItem(ZOOM_KEY));
+      return z >= ZOOM_MIN && z <= ZOOM_MAX ? z : 1;
+    } catch {
+      return 1;
+    }
+  });
+  const setZoom = (z: number) => {
+    const next = Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z)) * 10) / 10;
+    setZoomState(next);
+    try {
+      localStorage.setItem(ZOOM_KEY, String(next));
+    } catch {
+      // storage unavailable; zoom lasts for this visit
+    }
+  };
+  return [zoom, setZoom] as const;
+}
 
 const DEFAULT_LEVELS_KEY = "checklista.defaultLevels";
 

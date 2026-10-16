@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { takeTip, turnOffTips } from "@/lib/tips";
+import { cn } from "@/lib/utils";
 
 // One row per checkbox or dropdown option, stored as newline-separated
 // options like before. Empty rows are dropped on save (see optList).
@@ -14,6 +15,7 @@ export function OptionRows({
   onChange,
   onRename,
   extra,
+  rowClass,
 }: {
   kind: "checkbox" | "dropdown";
   value: string;
@@ -22,6 +24,8 @@ export function OptionRows({
   onRename?: (from: string, to: string) => void;
   /** Rendered at the end of each row, e.g. a jump target picker. */
   extra?: (option: string) => ReactNode;
+  /** Extra classes for a row, e.g. the color of the branch it leads into. */
+  rowClass?: (option: string) => string | undefined;
 }) {
   const t = useT();
   // Rows live in local state: a single empty row and no rows both join to "",
@@ -92,7 +96,7 @@ export function OptionRows({
         </div>
       )}
       {rows.map((row, i) => (
-        <div key={i} className="flex items-center gap-2">
+        <div key={i} className={cn("flex items-center gap-2", rowClass?.(row.trim()))}>
           {kind === "checkbox" ? (
             <Checkbox disabled aria-hidden className="shrink-0" />
           ) : (
