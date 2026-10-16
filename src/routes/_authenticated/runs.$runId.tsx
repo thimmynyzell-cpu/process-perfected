@@ -93,6 +93,7 @@ function RunView({ ctx }: { ctx: OrgContext }) {
     parentKey: i.parent_position != null ? (posId.get(i.parent_position) ?? null) : null,
     showWhen: i.show_when,
     jumps: jumpKeys(i.jump_to, posId),
+    section: i.section,
   }));
   const values = Object.fromEntries(Object.entries(answers).map(([k, a]) => [k, a.value]));
   const ownLevel = visibleKeys(

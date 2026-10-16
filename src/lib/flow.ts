@@ -8,6 +8,7 @@ export type FlowNode = {
   showWhen: string | null;
   /** Answer value → key of a later node to jump to. */
   jumps?: Record<string, string>;
+  section?: string | null;
   /** Hidden regardless of answers, e.g. not shown at the member's level. */
   hidden?: boolean;
 };
@@ -39,32 +40,67 @@ function answerValues(type: string, value: unknown): string[] {
   return k === null ? [] : [k];
 }
 
+export type Lane = {
+  /** Answer values that lead into this lane; empty for "all other answers". */
+  values: string[];
+  /** First and one-past-last index of the lane's questions. */
+  start: number;
+  end: number;
+};
+
 /**
- * Index of the node to continue at after `idx`, given its answer. Several
- * checked options jump to the earliest of their targets; an option without a
- * jump continues with the next node.
+ * Splits the questions after a question with jumps into one lane per jump
+ * target, plus a lane for answers without a jump when questions come before
+ * the first target. A lane runs until the next lane starts; all lanes meet
+ * again at `merge`, the end of the last target's section (or `bound`).
+ * Returns null for a question without usable jumps.
  */
-function nextIndex(
-  nodes: FlowNode[],
+export function lanesOf(
+  nodes: { key: string; section?: string | null; jumps?: Record<string, string> }[],
   idx: number,
-  value: unknown,
-  indexOf: Map<string, number>,
-): number {
+  bound = nodes.length,
+): { lanes: Lane[]; merge: number } | null {
   const n = nodes[idx]!;
-  const values = answerValues(n.type, value);
-  if (!n.jumps || !values.length) return idx + 1;
-  let next = Infinity;
-  for (const v of values) {
-    const target = n.jumps[v] ? indexOf.get(n.jumps[v]) : undefined;
-    next = Math.min(next, target !== undefined && target > idx ? target : idx + 1);
+  if (!n.jumps) return null;
+  const indexOf = new Map(nodes.map((x, i) => [x.key, i]));
+  const byTarget = new Map<number, string[]>();
+  for (const [v, key] of Object.entries(n.jumps)) {
+    const target = indexOf.get(key);
+    if (target === undefined || target <= idx || target >= bound) continue;
+    byTarget.set(target, [...(byTarget.get(target) ?? []), v]);
   }
-  return next;
+  if (!byTarget.size) return null;
+  const starts = [...byTarget.keys()].sort((a, b) => a - b);
+  const last = starts.at(-1)!;
+  const section = (i: number) => (nodes[i]?.section ?? "").trim();
+  let merge = last + 1;
+  while (merge < bound && section(merge) === section(last)) merge++;
+  const lanes: Lane[] = [];
+  if (starts[0]! > idx + 1) lanes.push({ values: [], start: idx + 1, end: starts[0]! });
+  starts.forEach((start, k) =>
+    lanes.push({ values: byTarget.get(start)!, start, end: starts[k + 1] ?? merge }),
+  );
+  return { lanes, merge };
 }
 
-/** Returns the set of visible node keys given answers keyed by node key. Nodes must be in order. */
+/** Lanes an answer leads into: lanes for its values, or the "other answers" lane. */
+export function chosenLanes(lanes: Lane[], values: string[]): Lane[] {
+  if (!values.length) return lanes;
+  return lanes.filter((l) =>
+    values.some((v) =>
+      l.values.length ? l.values.includes(v) : !lanes.some((o) => o.values.includes(v)),
+    ),
+  );
+}
+
+/**
+ * Returns the set of visible node keys given answers keyed by node key. Nodes
+ * must be in order. An answer that jumps shows only its branch and then
+ * continues where the branches meet; an answer without a jump, or no answer
+ * yet, carries on with the next question.
+ */
 export function visibleKeys(nodes: FlowNode[], answers: Record<string, unknown>): Set<string> {
   const byKey = new Map(nodes.map((n) => [n.key, n]));
-  const indexOf = new Map(nodes.map((n, i) => [n.key, i]));
   const memo = new Map<string, boolean>();
   const visit = (n: FlowNode, depth = 0): boolean => {
     if (memo.has(n.key)) return memo.get(n.key)!;
@@ -77,12 +113,32 @@ export function visibleKeys(nodes: FlowNode[], answers: Record<string, unknown>)
     return ok;
   };
   const visible = new Set<string>();
-  let resumeAt = 0;
-  nodes.forEach((n, idx) => {
-    if (idx < resumeAt || !visit(n)) return;
-    visible.add(n.key);
-    resumeAt = Math.max(resumeAt, nextIndex(nodes, idx, answers[n.key], indexOf));
-  });
+  const walk = (from: number, to: number, depth: number) => {
+    let i = from;
+    while (i < to) {
+      const n = nodes[i]!;
+      if (!visit(n)) {
+        i++;
+        continue;
+      }
+      visible.add(n.key);
+      const split = depth < 20 ? lanesOf(nodes, i, to) : null;
+      if (!split) {
+        i++;
+        continue;
+      }
+      const chosen = chosenLanes(split.lanes, answerValues(n.type, answers[n.key]));
+      // Unanswered, or an answer without a jump: carry on with the next question.
+      if (chosen.length === split.lanes.length || chosen.some((l) => !l.values.length)) {
+        i++;
+        continue;
+      }
+      // A jump leads into its branch, then past the other branches to where they meet.
+      for (const lane of chosen) walk(lane.start, lane.end, depth + 1);
+      i = split.merge;
+    }
+  };
+  walk(0, nodes.length, 0);
   return visible;
 }
 

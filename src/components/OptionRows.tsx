@@ -58,7 +58,7 @@ export function OptionRows({
   };
 
   return (
-    <div className="relative space-y-2 md:col-span-3">
+    <div className="relative space-y-2 @sm:col-span-2 @2xl:col-span-3">
       {tip !== null && (
         <div
           role="status"

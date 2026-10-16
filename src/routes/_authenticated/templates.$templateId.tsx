@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { FlowTree } from "@/components/FlowTree";
 import { OptionRows } from "@/components/OptionRows";
 import { Hint } from "@/components/Hint";
-import { branchValues, jumpKeys, type FlowNode } from "@/lib/flow";
+import { branchValues, jumpKeys, lanesOf, type FlowNode } from "@/lib/flow";
 import { LEVELS, type Level } from "@/lib/levels";
 import { sectionOrder } from "@/lib/sections";
 import { currentVersionId, writeVersion } from "@/lib/versions";
@@ -92,7 +92,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   const [extraSections, setExtraSections] = useState<string[]>([]);
   const [highlightKey, setHighlightKey] = useState<string | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
-  const itemRefs = useRef(new Map<string, HTMLLIElement>());
+  const itemRefs = useRef(new Map<string, HTMLElement>());
   // Drag and drop: a card becomes draggable when pressed outside its form
   // fields, so text in inputs can still be selected with the mouse.
   const [dragArmed, setDragArmed] = useState<string | null>(null);
@@ -200,24 +200,31 @@ function Editor({ ctx }: { ctx: OrgContext }) {
     setDropAt(null);
   };
 
+  const newItem = (section: string): DraftItem => ({
+    key: crypto.randomUUID(),
+    baseKey: "",
+    section,
+    type: "checkbox",
+    label: "",
+    help_text: "",
+    required: false,
+    allow_note: false,
+    allow_photo: false,
+    options: "",
+    parent: "",
+    show_when: "",
+    jumps: {},
+    levels: [...defaultLevels],
+  });
+  /** Inserts a new question at `at`, e.g. at the end of a branch. */
+  const addAt = (at: number, section: string) => {
+    const item = newItem(section);
+    setItems((list) => [...list.slice(0, at), item, ...list.slice(at)]);
+    jumpToItem(item.key);
+  };
   const add = () =>
     setItems((list) => {
-      const item: DraftItem = {
-        key: crypto.randomUUID(),
-        baseKey: "",
-        section: chapter || (list.at(-1)?.section ?? ""),
-        type: "checkbox",
-        label: "",
-        help_text: "",
-        required: false,
-        allow_note: false,
-        allow_photo: false,
-        options: "",
-        parent: "",
-        show_when: "",
-        jumps: {},
-        levels: [...defaultLevels],
-      };
+      const item = newItem(chapter || (list.at(-1)?.section ?? ""));
       // With a section picked, the new question goes last in that section.
       const last = chapter ? list.map((i) => i.section.trim()).lastIndexOf(chapter) : -1;
       return last >= 0 ? [...list.slice(0, last + 1), item, ...list.slice(last + 1)] : [...list, item];
@@ -339,6 +346,306 @@ function Editor({ ctx }: { ctx: OrgContext }) {
     }
   }
 
+  // Questions laid out as a tree: after a question with jumps, each answer's
+  // branch is shown to the right of it and the list continues where they meet.
+  const laneNodes = items.map((i) => ({ key: i.key, section: i.section, jumps: i.jumps }));
+  const shownKeys = new Set(shownItems.map((i) => i.key));
+  const laneLabel = (values: string[]) =>
+    values.length ? values.map(yesNo).join(" / ") : t("flow.otherAnswers");
+
+  const renderCard = (item: DraftItem) => {
+    const idx = items.findIndex((i) => i.key === item.key);
+    return (
+            <div
+              key={item.key}
+              ref={(el) => {
+                if (el) itemRefs.current.set(item.key, el);
+                else itemRefs.current.delete(item.key);
+              }}
+              draggable={manage && !focusKey && dragArmed === item.key}
+              onPointerDown={(e) => {
+                const field = (e.target as HTMLElement).closest("input, textarea, select, button, label, [role=checkbox]");
+                setDragArmed(field ? null : item.key);
+              }}
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", item.key);
+                setDragKey(item.key);
+              }}
+              onDragOver={(e) => {
+                if (!dragKey) return;
+                e.preventDefault();
+                const box = e.currentTarget.getBoundingClientRect();
+                const after = e.clientY > box.top + box.height / 2;
+                if (dropAt?.key !== item.key || dropAt.after !== after) setDropAt({ key: item.key, after });
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragKey && dropAt) setItems((list) => reorder(list, dragKey, dropAt.key, dropAt.after));
+                endDrag();
+              }}
+              onDragEnd={endDrag}
+              className={cn(
+                // @container: the card lays out by its own width, also when narrow in a branch.
+                "@container relative rounded-xl border bg-card p-4 shadow-soft transition-all",
+                manage && !focusKey && "cursor-grab active:cursor-grabbing",
+                highlightKey === item.key && "border-primary ring-2 ring-primary/40",
+                dragKey === item.key && "opacity-40",
+              )}
+            >
+              {dropAt?.key === item.key && dragKey !== item.key && (
+                <span
+                  className={cn(
+                    "pointer-events-none absolute inset-x-2 h-1 rounded-full bg-primary",
+                    dropAt.after ? "-bottom-2.5" : "-top-2.5",
+                  )}
+                />
+              )}
+              <div className="flex items-start gap-3">
+                <div className="mt-2 flex shrink-0 flex-col items-center gap-1">
+                  <span className="flex size-6 items-center justify-center rounded-full bg-muted text-xs font-medium">
+                    {idx + 1}
+                  </span>
+                  {manage && !focusKey && (
+                    <Hint text={t("templates.dragHint")}>
+                      <GripVertical className="size-4 text-muted-foreground" />
+                    </Hint>
+                  )}
+                </div>
+                <div className="grid flex-1 gap-3 @sm:grid-cols-2 @2xl:grid-cols-[1fr_10rem_10rem]">
+                  <Input
+                    className="@sm:col-span-2 @2xl:col-span-1"
+                    placeholder={t("templates.label")}
+                    value={item.label}
+                    onChange={(e) => update(idx, { label: e.target.value })}
+                  />
+                  <select
+                    className={nativeSelect}
+                    aria-label={t("section.title")}
+                    value={item.section.trim()}
+                    onChange={(e) => {
+                      const v = e.target.value === ADD_SECTION ? addSection() : e.target.value;
+                      if (v !== null) update(idx, { section: v });
+                    }}
+                  >
+                    <option value="">{t("section.none")}</option>
+                    {sections.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                    <option value={ADD_SECTION}>{t("section.add")}</option>
+                  </select>
+                  <select
+                    className={nativeSelect}
+                    value={item.type}
+                    onChange={(e) => update(idx, { type: e.target.value as ItemType })}
+                  >
+                    {(["checkbox", "text", "number", "dropdown"] as const).map((type) => (
+                      <option key={type} value={type}>
+                        {t(`itemType.${type}`)}
+                      </option>
+                    ))}
+                  </select>
+                  <Input
+                    className="@sm:col-span-2 @2xl:col-span-3"
+                    placeholder={`${t("templates.helpText")} (${t("common.optional")})`}
+                    value={item.help_text}
+                    onChange={(e) => update(idx, { help_text: e.target.value })}
+                  />
+                  {(item.type === "checkbox" || item.type === "dropdown") && (
+                    <OptionRows
+                      kind={item.type}
+                      value={item.options}
+                      onChange={(options) => update(idx, { options })}
+                      onRename={(from, to) => update(idx, { jumps: renameJump(item.jumps, from, to) })}
+                      extra={(option) =>
+                        option && idx < items.length - 1 ? (
+                          <JumpSelect
+                            value={item.jumps[option]}
+                            later={items.slice(idx + 1)}
+                            number={(key) => items.findIndex((x) => x.key === key) + 1}
+                            onChange={(key) => update(idx, { jumps: setJump(item.jumps, option, key) })}
+                          />
+                        ) : null
+                      }
+                    />
+                  )}
+                  {(() => {
+                    const parents = items.slice(0, idx).filter((p) => p.type === "checkbox" || p.type === "dropdown");
+                    const parent = parents.find((p) => p.key === item.parent);
+                    const vals = parent ? branchValues(parent.type, optList(parent.options)) : [];
+                    return (
+                      <div className="flex flex-wrap items-center gap-2 text-sm @sm:col-span-2 @2xl:col-span-3">
+                        <GitBranch className="size-4 text-muted-foreground" />
+                        <span className="text-muted-foreground">{t("flow.showIf")}</span>
+                        <select
+                          className={nativeSelect + " w-auto max-w-xs"}
+                          value={parent ? item.parent : ""}
+                          onChange={(e) => {
+                            const p = parents.find((x) => x.key === e.target.value);
+                            update(idx, {
+                              parent: e.target.value,
+                              show_when: p ? (branchValues(p.type, optList(p.options))[0] ?? "") : "",
+                            });
+                          }}
+                        >
+                          <option value="">{t("flow.always")}</option>
+                          {parents.map((p) => (
+                            <option key={p.key} value={p.key}>
+                              {items.indexOf(p) + 1}. {p.label || "—"}
+                            </option>
+                          ))}
+                        </select>
+                        {parent && (
+                          <>
+                            <span className="text-muted-foreground">{t("flow.answer")}</span>
+                            <select
+                              className={nativeSelect + " w-auto"}
+                              value={item.show_when}
+                              onChange={(e) => update(idx, { show_when: e.target.value })}
+                            >
+                              {vals.map((v) => (
+                                <option key={v} value={v}>
+                                  {yesNo(v)}
+                                </option>
+                              ))}
+                            </select>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  <JumpEditor
+                    item={item}
+                    later={items.slice(idx + 1)}
+                    number={(key) => items.findIndex((x) => x.key === key) + 1}
+                    yesNo={yesNo}
+                    onChange={(jumps) => update(idx, { jumps })}
+                  />
+                  <div className="flex flex-wrap items-center gap-4 text-sm @sm:col-span-2 @2xl:col-span-3">
+                    {(
+                      [
+                        ["required", t("common.required")],
+                        ["allow_note", t("templates.allowNote")],
+                        ["allow_photo", t("templates.allowPhoto")],
+                      ] as const
+                    ).map(([field, label]) => (
+                      <label key={field} className="flex items-center gap-2">
+                        <Switch checked={item[field]} onCheckedChange={(v) => update(idx, { [field]: v })} />
+                        {label}
+                      </label>
+                    ))}
+                    <div className="@2xl:ml-auto">
+                      <LevelPicker
+                        label={t("level.shownFor")}
+                        hint={t("level.shownForHint")}
+                        value={item.levels}
+                        onChange={(levels) => update(idx, { levels })}
+                      />
+                    </div>
+                  </div>
+                </div>
+                {manage && (
+                  <div className="flex flex-col gap-1">
+                    {(item.type === "checkbox" || item.type === "dropdown") && focusKey !== item.key && (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        title={t("flow.enterBranch")}
+                        aria-label={t("flow.enterBranch")}
+                        onClick={() => setFocusKey(item.key)}
+                      >
+                        <GitBranch className="size-4 text-primary" />
+                      </Button>
+                    )}
+                    {!focusKey && (
+                      <>
+                        <Button type="button" size="icon" variant="ghost" aria-label="Upp" onClick={() => move(idx, -1)}>
+                          <ArrowUp className="size-4" />
+                        </Button>
+                        <Button type="button" size="icon" variant="ghost" aria-label="Ner" onClick={() => move(idx, 1)}>
+                          <ArrowDown className="size-4" />
+                        </Button>
+                      </>
+                    )}
+                    <Hint text={t("templates.duplicateItem")}>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        aria-label={t("templates.duplicateItem")}
+                        onClick={() => duplicate(idx)}
+                      >
+                        <Copy className="size-4" />
+                      </Button>
+                    </Hint>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      aria-label={t("common.delete")}
+                      onClick={() => setItems((l) => l.filter((_, i) => i !== idx))}
+                    >
+                      <Trash2 className="size-4 text-destructive" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+    );
+  };
+
+  const renderRange = (from: number, to: number, depth: number): React.ReactNode[] => {
+    const out: React.ReactNode[] = [];
+    let i = from;
+    while (i < to) {
+      const item = items[i]!;
+      const split = !focusKey && depth < 4 ? lanesOf(laneNodes, i, to) : null;
+      if (!shownKeys.has(item.key)) {
+        i++;
+        continue;
+      }
+      if (!split) {
+        out.push(<li key={item.key}>{renderCard(item)}</li>);
+        i++;
+        continue;
+      }
+      out.push(
+        <li key={item.key} className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          {renderCard(item)}
+          <div className="space-y-3 border-l-2 border-primary/30 pl-3">
+            {split.lanes.map((lane) => (
+              <section key={lane.start} className="rounded-xl border border-dashed border-primary/40 bg-primary/5 p-3">
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-primary">
+                  <GitBranch className="size-3.5" /> {t("flow.if")} {laneLabel(lane.values)}
+                  <span className="font-normal text-muted-foreground">
+                    · {t("flow.laneCount", { count: lane.end - lane.start })}
+                  </span>
+                </p>
+                <ol className="space-y-3">{renderRange(lane.start, lane.end, depth + 1)}</ol>
+                {manage && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="mt-2"
+                    onClick={() => addAt(lane.end, items[lane.end - 1]?.section ?? item.section)}
+                  >
+                    <Plus className="size-4" /> {t("flow.addInLane")}
+                  </Button>
+                )}
+              </section>
+            ))}
+          </div>
+        </li>,
+      );
+      i = split.merge;
+    }
+    return out;
+  };
+
   return (
     <>
       <Link to="/templates" className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
@@ -453,249 +760,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
           </div>
         )}
 
-        <ol className="space-y-3">
-          {shownItems.map((item) => {
-            const idx = items.findIndex((i) => i.key === item.key);
-            return (
-            <li
-              key={item.key}
-              ref={(el) => {
-                if (el) itemRefs.current.set(item.key, el);
-                else itemRefs.current.delete(item.key);
-              }}
-              draggable={manage && !focusKey && dragArmed === item.key}
-              onPointerDown={(e) => {
-                const field = (e.target as HTMLElement).closest("input, textarea, select, button, label, [role=checkbox]");
-                setDragArmed(field ? null : item.key);
-              }}
-              onDragStart={(e) => {
-                e.dataTransfer.effectAllowed = "move";
-                e.dataTransfer.setData("text/plain", item.key);
-                setDragKey(item.key);
-              }}
-              onDragOver={(e) => {
-                if (!dragKey) return;
-                e.preventDefault();
-                const box = e.currentTarget.getBoundingClientRect();
-                const after = e.clientY > box.top + box.height / 2;
-                if (dropAt?.key !== item.key || dropAt.after !== after) setDropAt({ key: item.key, after });
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (dragKey && dropAt) setItems((list) => reorder(list, dragKey, dropAt.key, dropAt.after));
-                endDrag();
-              }}
-              onDragEnd={endDrag}
-              className={cn(
-                "relative rounded-xl border bg-card p-4 shadow-soft transition-all",
-                manage && !focusKey && "cursor-grab active:cursor-grabbing",
-                highlightKey === item.key && "border-primary ring-2 ring-primary/40",
-                dragKey === item.key && "opacity-40",
-              )}
-            >
-              {dropAt?.key === item.key && dragKey !== item.key && (
-                <span
-                  className={cn(
-                    "pointer-events-none absolute inset-x-2 h-1 rounded-full bg-primary",
-                    dropAt.after ? "-bottom-2.5" : "-top-2.5",
-                  )}
-                />
-              )}
-              <div className="flex items-start gap-3">
-                <div className="mt-2 flex shrink-0 flex-col items-center gap-1">
-                  <span className="flex size-6 items-center justify-center rounded-full bg-muted text-xs font-medium">
-                    {idx + 1}
-                  </span>
-                  {manage && !focusKey && (
-                    <Hint text={t("templates.dragHint")}>
-                      <GripVertical className="size-4 text-muted-foreground" />
-                    </Hint>
-                  )}
-                </div>
-                <div className="grid flex-1 gap-3 md:grid-cols-[1fr_10rem_10rem]">
-                  <Input
-                    placeholder={t("templates.label")}
-                    value={item.label}
-                    onChange={(e) => update(idx, { label: e.target.value })}
-                  />
-                  <select
-                    className={nativeSelect}
-                    aria-label={t("section.title")}
-                    value={item.section.trim()}
-                    onChange={(e) => {
-                      const v = e.target.value === ADD_SECTION ? addSection() : e.target.value;
-                      if (v !== null) update(idx, { section: v });
-                    }}
-                  >
-                    <option value="">{t("section.none")}</option>
-                    {sections.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                    <option value={ADD_SECTION}>{t("section.add")}</option>
-                  </select>
-                  <select
-                    className={nativeSelect}
-                    value={item.type}
-                    onChange={(e) => update(idx, { type: e.target.value as ItemType })}
-                  >
-                    {(["checkbox", "text", "number", "dropdown"] as const).map((type) => (
-                      <option key={type} value={type}>
-                        {t(`itemType.${type}`)}
-                      </option>
-                    ))}
-                  </select>
-                  <Input
-                    className="md:col-span-3"
-                    placeholder={`${t("templates.helpText")} (${t("common.optional")})`}
-                    value={item.help_text}
-                    onChange={(e) => update(idx, { help_text: e.target.value })}
-                  />
-                  {(item.type === "checkbox" || item.type === "dropdown") && (
-                    <OptionRows
-                      kind={item.type}
-                      value={item.options}
-                      onChange={(options) => update(idx, { options })}
-                      onRename={(from, to) => update(idx, { jumps: renameJump(item.jumps, from, to) })}
-                      extra={(option) =>
-                        option && idx < items.length - 1 ? (
-                          <JumpSelect
-                            value={item.jumps[option]}
-                            later={items.slice(idx + 1)}
-                            number={(key) => items.findIndex((x) => x.key === key) + 1}
-                            onChange={(key) => update(idx, { jumps: setJump(item.jumps, option, key) })}
-                          />
-                        ) : null
-                      }
-                    />
-                  )}
-                  {(() => {
-                    const parents = items.slice(0, idx).filter((p) => p.type === "checkbox" || p.type === "dropdown");
-                    const parent = parents.find((p) => p.key === item.parent);
-                    const vals = parent ? branchValues(parent.type, optList(parent.options)) : [];
-                    return (
-                      <div className="flex flex-wrap items-center gap-2 text-sm md:col-span-3">
-                        <GitBranch className="size-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">{t("flow.showIf")}</span>
-                        <select
-                          className={nativeSelect + " w-auto max-w-xs"}
-                          value={parent ? item.parent : ""}
-                          onChange={(e) => {
-                            const p = parents.find((x) => x.key === e.target.value);
-                            update(idx, {
-                              parent: e.target.value,
-                              show_when: p ? (branchValues(p.type, optList(p.options))[0] ?? "") : "",
-                            });
-                          }}
-                        >
-                          <option value="">{t("flow.always")}</option>
-                          {parents.map((p) => (
-                            <option key={p.key} value={p.key}>
-                              {items.indexOf(p) + 1}. {p.label || "—"}
-                            </option>
-                          ))}
-                        </select>
-                        {parent && (
-                          <>
-                            <span className="text-muted-foreground">{t("flow.answer")}</span>
-                            <select
-                              className={nativeSelect + " w-auto"}
-                              value={item.show_when}
-                              onChange={(e) => update(idx, { show_when: e.target.value })}
-                            >
-                              {vals.map((v) => (
-                                <option key={v} value={v}>
-                                  {yesNo(v)}
-                                </option>
-                              ))}
-                            </select>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })()}
-                  <JumpEditor
-                    item={item}
-                    later={items.slice(idx + 1)}
-                    number={(key) => items.findIndex((x) => x.key === key) + 1}
-                    yesNo={yesNo}
-                    onChange={(jumps) => update(idx, { jumps })}
-                  />
-                  <div className="flex flex-wrap items-center gap-4 text-sm md:col-span-3">
-                    {(
-                      [
-                        ["required", t("common.required")],
-                        ["allow_note", t("templates.allowNote")],
-                        ["allow_photo", t("templates.allowPhoto")],
-                      ] as const
-                    ).map(([field, label]) => (
-                      <label key={field} className="flex items-center gap-2">
-                        <Switch checked={item[field]} onCheckedChange={(v) => update(idx, { [field]: v })} />
-                        {label}
-                      </label>
-                    ))}
-                    <div className="md:ml-auto">
-                      <LevelPicker
-                        label={t("level.shownFor")}
-                        hint={t("level.shownForHint")}
-                        value={item.levels}
-                        onChange={(levels) => update(idx, { levels })}
-                      />
-                    </div>
-                  </div>
-                </div>
-                {manage && (
-                  <div className="flex flex-col gap-1">
-                    {(item.type === "checkbox" || item.type === "dropdown") && focusKey !== item.key && (
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        title={t("flow.enterBranch")}
-                        aria-label={t("flow.enterBranch")}
-                        onClick={() => setFocusKey(item.key)}
-                      >
-                        <GitBranch className="size-4 text-primary" />
-                      </Button>
-                    )}
-                    {!focusKey && (
-                      <>
-                        <Button type="button" size="icon" variant="ghost" aria-label="Upp" onClick={() => move(idx, -1)}>
-                          <ArrowUp className="size-4" />
-                        </Button>
-                        <Button type="button" size="icon" variant="ghost" aria-label="Ner" onClick={() => move(idx, 1)}>
-                          <ArrowDown className="size-4" />
-                        </Button>
-                      </>
-                    )}
-                    <Hint text={t("templates.duplicateItem")}>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        aria-label={t("templates.duplicateItem")}
-                        onClick={() => duplicate(idx)}
-                      >
-                        <Copy className="size-4" />
-                      </Button>
-                    </Hint>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      aria-label={t("common.delete")}
-                      onClick={() => setItems((l) => l.filter((_, i) => i !== idx))}
-                    >
-                      <Trash2 className="size-4 text-destructive" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </li>
-            );
-          })}
-        </ol>
+        <ol className="space-y-3">{renderRange(0, items.length, 0)}</ol>
 
         {manage && (
           <Button type="button" variant="outline" onClick={add}>
@@ -804,7 +869,7 @@ function JumpEditor({
 
   if (!open && !hasJumps) {
     return (
-      <div className="md:col-span-3">
+      <div className="@sm:col-span-2 @2xl:col-span-3">
         <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(true)}>
           <CornerDownRight className="size-4" /> {t("flow.addJump")}
         </Button>
@@ -813,7 +878,7 @@ function JumpEditor({
   }
 
   return (
-    <div className="space-y-2 rounded-lg border border-dashed p-3 text-sm md:col-span-3">
+    <div className="space-y-2 rounded-lg border border-dashed p-3 text-sm @sm:col-span-2 @2xl:col-span-3">
       <p className="flex items-center gap-1.5 font-medium">
         <CornerDownRight className="size-4 text-primary" /> {t("flow.jumpTitle")}
       </p>

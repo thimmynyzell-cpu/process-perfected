@@ -1,4 +1,4 @@
-import { visibleKeys, type FlowNode } from "./flow";
+import { lanesOf, visibleKeys, type FlowNode } from "./flow";
 
 const node = (key: string, extra: Partial<FlowNode> = {}): FlowNode => ({
   key,
@@ -29,7 +29,8 @@ describe("jumps", () => {
   });
 
   it("continues at the jump target", () => {
-    expect(keys({ q4: "A" })).toEqual(["q1", "q4", "q5", "q6", "q7", "q8", "q9"]);
+    // A's branch ends where B's starts; with no sections the branches meet at the end
+    expect(keys({ q4: "A" })).toEqual(["q1", "q4", "q5", "q6", "q7"]);
     expect(keys({ q4: "B" })).toEqual(["q1", "q4", "q8", "q9"]);
   });
 
@@ -71,5 +72,31 @@ describe("hidden nodes", () => {
     ];
     expect([...visibleKeys(n, {})]).toEqual(["a", "b", "d"]);
     expect([...visibleKeys(n, { a: "A" })]).toEqual(["a", "d"]);
+  });
+});
+
+describe("lanesOf", () => {
+  const sec = (key: string, section: string, extra: Partial<FlowNode> = {}) =>
+    node(key, { section, ...extra });
+  const nodes = [
+    sec("q4", "UTREDNING", { type: "dropdown", options: ["A", "B"], jumps: { A: "q5", B: "q8" } }),
+    sec("q5", "UTREDNING"),
+    sec("q6", "UTREDNING"),
+    sec("q8", "UTREDNING"),
+    sec("q9", "UTREDNING"),
+    sec("q10", "AVSLUT"),
+  ];
+  it("gives each jump a branch that ends where the next starts and meets at the section end", () => {
+    expect(lanesOf(nodes, 0)).toEqual({
+      lanes: [
+        { values: ["A"], start: 1, end: 3 },
+        { values: ["B"], start: 3, end: 5 },
+      ],
+      merge: 5,
+    });
+  });
+  it("continues after the branches where they meet", () => {
+    expect([...visibleKeys(nodes, { q4: "A" })]).toEqual(["q4", "q5", "q6", "q10"]);
+    expect([...visibleKeys(nodes, { q4: "B" })]).toEqual(["q4", "q8", "q9", "q10"]);
   });
 });
