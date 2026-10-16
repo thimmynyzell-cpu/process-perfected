@@ -63,32 +63,3 @@ export function laneColors(lanes: { values: string[] }[]): LaneColor[] {
   let n = 0;
   return lanes.map((l) => (l.values.length ? LANE_COLORS[n++ % LANE_COLORS.length]! : OTHER_LANE));
 }
-
-/**
- * Colors for a whole checklist: the branch color of every question inside a
- * branch (innermost branch wins), and for each question with jumps the color
- * each of its answers leads into.
- */
-export function colorTree(
-  nodes: { key: string; section?: string | null; jumps?: Record<string, string> }[],
-  lanesOf: (
-    nodes: { key: string; section?: string | null; jumps?: Record<string, string> }[],
-    idx: number,
-  ) => { lanes: { values: string[]; start: number; end: number }[] } | null,
-) {
-  const item = new Map<string, { color: LaneColor; values: string[]; first: boolean }>();
-  const answers = new Map<string, Record<string, LaneColor>>();
-  nodes.forEach((n, i) => {
-    const split = lanesOf(nodes, i);
-    if (!split) return;
-    const colors = laneColors(split.lanes);
-    const byValue: Record<string, LaneColor> = {};
-    split.lanes.forEach((l, k) => {
-      for (const v of l.values) byValue[v] = colors[k]!;
-      for (let j = l.start; j < l.end; j++)
-        item.set(nodes[j]!.key, { color: colors[k]!, values: l.values, first: j === l.start });
-    });
-    answers.set(n.key, byValue);
-  });
-  return { item, answers };
-}
