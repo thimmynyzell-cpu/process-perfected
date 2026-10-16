@@ -19,6 +19,7 @@ import { OptionRows } from "@/components/OptionRows";
 import { Hint } from "@/components/Hint";
 import { branchValues, jumpKeys, type FlowNode } from "@/lib/flow";
 import { LEVELS, type Level } from "@/lib/levels";
+import { sectionOrder } from "@/lib/sections";
 import { currentVersionId, writeVersion } from "@/lib/versions";
 import { applyBaseChange, folderOf, reorder } from "@/lib/items";
 import { toast } from "sonner";
@@ -86,6 +87,9 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   const [saving, setSaving] = useState(false);
   const [flowOpen, setFlowOpen] = useState(false);
   const [defaultLevels, setDefaultLevels] = useDefaultLevels();
+  // Section shown in the editor ("" = all), and sections added but not used yet.
+  const [chapter, setChapter] = useState("");
+  const [extraSections, setExtraSections] = useState<string[]>([]);
   const [highlightKey, setHighlightKey] = useState<string | null>(null);
   const [focusKey, setFocusKey] = useState<string | null>(null);
   const itemRefs = useRef(new Map<string, HTMLLIElement>());
@@ -163,7 +167,15 @@ function Editor({ ctx }: { ctx: OrgContext }) {
     return new Set(items.filter((i) => inBranch(i.key)).map((i) => i.key));
   })();
   const focusItem = focusKey ? items.find((i) => i.key === focusKey) : undefined;
-  const shownItems = branchKeys ? items.filter((i) => branchKeys.has(i.key)) : items;
+  const sections = sectionOrder([...items.map((i) => i.section), ...extraSections], true);
+  const inChapter = (i: DraftItem) => !chapter || i.section.trim() === chapter;
+  const shownItems = items.filter((i) => (branchKeys ? branchKeys.has(i.key) : true) && inChapter(i));
+  const addSection = () => {
+    const name = window.prompt(t("section.newPrompt"))?.trim();
+    if (!name) return null;
+    if (!sections.includes(name)) setExtraSections((l) => [...l, name]);
+    return name;
+  };
 
   const update = (idx: number, patch: Partial<DraftItem>) =>
     setItems((list) => list.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
@@ -189,12 +201,11 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   };
 
   const add = () =>
-    setItems((list) => [
-      ...list,
-      {
+    setItems((list) => {
+      const item: DraftItem = {
         key: crypto.randomUUID(),
         baseKey: "",
-        section: list.at(-1)?.section ?? "",
+        section: chapter || (list.at(-1)?.section ?? ""),
         type: "checkbox",
         label: "",
         help_text: "",
@@ -206,8 +217,11 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         show_when: "",
         jumps: {},
         levels: [...defaultLevels],
-      },
-    ]);
+      };
+      // With a section picked, the new question goes last in that section.
+      const last = chapter ? list.map((i) => i.section.trim()).lastIndexOf(chapter) : -1;
+      return last >= 0 ? [...list.slice(0, last + 1), item, ...list.slice(last + 1)] : [...list, item];
+    });
 
   /**
    * Passes a saved base checklist's changes on to the checklists that use it:
@@ -380,6 +394,35 @@ function Editor({ ctx }: { ctx: OrgContext }) {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card px-4 py-3 text-sm">
+          <Hint text={t("section.filterHint")}>
+            <span className="cursor-help font-medium underline decoration-dotted underline-offset-4">
+              {t("section.title")}
+            </span>
+          </Hint>
+          <select
+            className={nativeSelect + " w-auto min-w-40"}
+            value={chapter}
+            onChange={(e) => {
+              if (e.target.value === ADD_SECTION) {
+                const name = addSection();
+                if (name) setChapter(name);
+              } else setChapter(e.target.value);
+            }}
+          >
+            <option value="">{t("section.all")}</option>
+            {sections.map((s) => (
+              <option key={s} value={s}>
+                {s} ({items.filter((i) => i.section.trim() === s).length})
+              </option>
+            ))}
+            {manage && <option value={ADD_SECTION}>{t("section.add")}</option>}
+          </select>
+          {chapter && (
+            <span className="text-xs text-muted-foreground">{t("section.filtered", { count: items.length - shownItems.length })}</span>
+          )}
+        </div>
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">{t("templates.versionNote")}</p>
           <div className="text-sm">
@@ -471,11 +514,27 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                 </div>
                 <div className="grid flex-1 gap-3 md:grid-cols-[1fr_10rem_10rem]">
                   <Input
-                    className="md:col-span-2"
                     placeholder={t("templates.label")}
                     value={item.label}
                     onChange={(e) => update(idx, { label: e.target.value })}
                   />
+                  <select
+                    className={nativeSelect}
+                    aria-label={t("section.title")}
+                    value={item.section.trim()}
+                    onChange={(e) => {
+                      const v = e.target.value === ADD_SECTION ? addSection() : e.target.value;
+                      if (v !== null) update(idx, { section: v });
+                    }}
+                  >
+                    <option value="">{t("section.none")}</option>
+                    {sections.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                    <option value={ADD_SECTION}>{t("section.add")}</option>
+                  </select>
                   <select
                     className={nativeSelect}
                     value={item.type}
@@ -818,6 +877,8 @@ function LevelPicker({
     </div>
   );
 }
+
+const ADD_SECTION = "\u0000add";
 
 const DEFAULT_LEVELS_KEY = "checklista.defaultLevels";
 

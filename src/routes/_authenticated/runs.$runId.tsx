@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CheckCircle2, Eye, EyeOff, Printer } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Eye, EyeOff, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
@@ -16,6 +16,7 @@ import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { jumpKeys, visibleKeys } from "@/lib/flow";
 import { shownForLevel } from "@/lib/levels";
+import { sectionOrder } from "@/lib/sections";
 import { Hint } from "@/components/Hint";
 
 type Item = Database["public"]["Tables"]["template_items"]["Row"];
@@ -57,6 +58,8 @@ function RunView({ ctx }: { ctx: OrgContext }) {
   const [answers, setAnswers] = useState<Record<string, Answer>>({});
   // Also show questions meant for other levels than the member's own.
   const [otherLevels, setOtherLevels] = useState(false);
+  // Section the agent is working in; the others are hidden.
+  const [chapter, setChapter] = useState<string | null>(null);
   useEffect(() => {
     if (!query.data) return;
     const map: Record<string, Answer> = {};
@@ -101,6 +104,16 @@ function RunView({ ctx }: { ctx: OrgContext }) {
   // Questions shown only because other levels are switched on; they are optional.
   const extra = new Set([...anyLevel].filter((k) => !ownLevel.has(k)));
   const items = all.filter((i) => vis.has(i.id));
+  const chapters = sectionOrder(items.map((i) => i.section));
+  const activeChapter = chapter && chapters.includes(chapter) ? chapter : (chapters[0] ?? null);
+  const chapterIdx = activeChapter ? chapters.indexOf(activeChapter) : -1;
+  // Questions without a section are shown in every section.
+  const inChapter = (i: { section: string | null }) =>
+    chapters.length < 2 || !(i.section ?? "").trim() || (i.section ?? "").trim() === activeChapter;
+  const goTo = (c: string) => {
+    setChapter(c);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
   const done = run.status === "completed";
   const filled = items.filter((i) => isFilled(i, answers[i.id])).length;
   const pct = items.length ? Math.round((filled / items.length) * 100) : 0;
@@ -132,7 +145,14 @@ function RunView({ ctx }: { ctx: OrgContext }) {
 
   async function complete() {
     const missing = items.filter((i) => i.required && !extra.has(i.id) && !isFilled(i, answers[i.id]));
-    if (missing.length) { toast.error(t("run.missingRequired")); return; }
+    if (missing.length) {
+      const where = (missing[0]!.section ?? "").trim();
+      if (chapters.length > 1 && where && where !== activeChapter) {
+        goTo(where);
+        toast.error(t("section.missingIn", { section: where }));
+      } else toast.error(t("run.missingRequired"));
+      return;
+    }
     const { error } = await supabase
       .from("runs")
       .update({ status: "completed", completed_at: new Date().toISOString() })
@@ -190,8 +210,47 @@ function RunView({ ctx }: { ctx: OrgContext }) {
         )}
       </div>
 
+      {chapters.length > 1 && (
+        <div className="mb-4 flex items-center gap-2">
+          <Button
+            size="icon"
+            variant="outline"
+            aria-label={t("section.prev")}
+            disabled={chapterIdx <= 0}
+            onClick={() => goTo(chapters[chapterIdx - 1]!)}
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <select
+            className={nativeSelect + " flex-1 font-medium"}
+            aria-label={t("section.title")}
+            value={activeChapter ?? ""}
+            onChange={(e) => goTo(e.target.value)}
+          >
+            {chapters.map((c, i) => {
+              const inC = items.filter((it) => (it.section ?? "").trim() === c);
+              const doneC = inC.filter((it) => isFilled(it, answers[it.id])).length;
+              return (
+                <option key={c} value={c}>
+                  {i + 1}. {c} ({doneC}/{inC.length})
+                </option>
+              );
+            })}
+          </select>
+          <Button
+            size="icon"
+            variant="outline"
+            aria-label={t("section.next")}
+            disabled={chapterIdx >= chapters.length - 1}
+            onClick={() => goTo(chapters[chapterIdx + 1]!)}
+          >
+            <ChevronRight className="size-4" />
+          </Button>
+        </div>
+      )}
+
       <div className="space-y-6">
-        {sections.filter((s) => s.items.some((i) => vis.has(i.id))).map((section, sIdx) => (
+        {sections.filter((s) => s.items.some((i) => vis.has(i.id) && inChapter(i))).map((section, sIdx) => (
           <section key={sIdx}>
             {section.name && (
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -199,7 +258,7 @@ function RunView({ ctx }: { ctx: OrgContext }) {
               </h2>
             )}
             <ul className="divide-y rounded-xl border bg-card">
-              {section.items.filter((item) => vis.has(item.id)).map((item) => {
+              {section.items.filter((item) => vis.has(item.id) && inChapter(item)).map((item) => {
                 const a = current(item.id);
                 const ok = isFilled(item, a);
                 return (
@@ -308,6 +367,14 @@ function RunView({ ctx }: { ctx: OrgContext }) {
           </section>
         ))}
       </div>
+
+      {chapters.length > 1 && chapterIdx < chapters.length - 1 && (
+        <div className="mt-4 flex justify-end">
+          <Button variant="outline" onClick={() => goTo(chapters[chapterIdx + 1]!)}>
+            {t("section.next")}: {chapters[chapterIdx + 1]} <ChevronRight className="size-4" />
+          </Button>
+        </div>
+      )}
 
       {!done && (
         <div className="no-print fixed inset-x-0 bottom-0 z-10 border-t bg-background/90 p-4 backdrop-blur md:left-64">
