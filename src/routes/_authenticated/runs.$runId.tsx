@@ -14,7 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { jumpKeys, visibleKeys } from "@/lib/flow";
+import { jumpKeys, lanesOf, visibleKeys } from "@/lib/flow";
+import { colorTree } from "@/lib/laneColors";
 import { shownForLevel } from "@/lib/levels";
 import { sectionOrder } from "@/lib/sections";
 import { Hint } from "@/components/Hint";
@@ -101,6 +102,9 @@ function RunView({ ctx }: { ctx: OrgContext }) {
     values,
   );
   const anyLevel = visibleKeys(nodes, values);
+  // Same branch colors as the editor: questions in a branch and the answers leading there.
+  const colors = colorTree(nodes, lanesOf);
+  const yesNo = (v: string) => (v === "true" ? t("flow.yes") : v === "false" ? t("flow.no") : v);
   const vis = otherLevels ? anyLevel : ownLevel;
   // Questions shown only because other levels are switched on; they are optional.
   const extra = new Set([...anyLevel].filter((k) => !ownLevel.has(k)));
@@ -263,7 +267,16 @@ function RunView({ ctx }: { ctx: OrgContext }) {
                 const a = current(item.id);
                 const ok = isFilled(item, a);
                 return (
-                  <li key={item.id} className="space-y-3 p-4">
+                  <li
+                    key={item.id}
+                    className={cn("space-y-3 p-4", colors.item.get(item.id) && cn("border-l-4", colors.item.get(item.id)!.color.bar))}
+                  >
+                    {colors.item.get(item.id)?.values.length && colors.item.get(item.id)!.first ? (
+                      <p className={cn("flex items-center gap-1.5 text-[11px] font-semibold", colors.item.get(item.id)!.color.text)}>
+                        <span className={cn("size-2 rounded-full", colors.item.get(item.id)!.color.dot)} />
+                        {t("flow.if")} {colors.item.get(item.id)!.values.map(yesNo).join(" / ")}
+                      </p>
+                    ) : null}
                     {item.type === "checkbox" && Array.isArray(item.options) && item.options.length > 0 ? (
                       <>
                         <ItemLabel item={item} ok={ok} extra={extra.has(item.id)} />
@@ -283,6 +296,9 @@ function RunView({ ctx }: { ctx: OrgContext }) {
                                     })
                                   }
                                 />
+                                {colors.answers.get(item.id)?.[o] && (
+                                  <span className={cn("size-2.5 shrink-0 rounded-full", colors.answers.get(item.id)![o]!.dot)} />
+                                )}
                                 {o}
                               </label>
                             );
@@ -298,11 +314,46 @@ function RunView({ ctx }: { ctx: OrgContext }) {
                           onCheckedChange={(v) => persist(item.id, { ...a, value: v === true })}
                         />
                         <ItemLabel item={item} ok={ok} extra={extra.has(item.id)} />
+                        {colors.answers.get(item.id) && (
+                          <span className="ml-auto flex shrink-0 gap-2 text-xs text-muted-foreground">
+                            {Object.entries(colors.answers.get(item.id)!).map(([v, c]) => (
+                              <span key={v} className="inline-flex items-center gap-1">
+                                <span className={cn("size-2.5 rounded-full", c.dot)} /> {yesNo(v)}
+                              </span>
+                            ))}
+                          </span>
+                        )}
                       </label>
                     ) : (
                       <>
                         <ItemLabel item={item} ok={ok} extra={extra.has(item.id)} />
-                        {item.type === "dropdown" ? (
+                        {item.type === "dropdown" && colors.answers.get(item.id) ? (
+                          // Branching choices as colored buttons, so the branch color is visible.
+                          <div className="flex flex-wrap gap-2" role="radiogroup">
+                            {((item.options as string[]) ?? []).map((o) => {
+                              const c = colors.answers.get(item.id)![o];
+                              const on = a.value === o;
+                              return (
+                                <button
+                                  key={o}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={on}
+                                  disabled={done}
+                                  onClick={() => persist(item.id, { ...a, value: on ? null : o })}
+                                  className={cn(
+                                    "inline-flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm font-medium transition-colors",
+                                    c ? c.border : "border-border",
+                                    on ? cn(c?.bg ?? "bg-muted", "ring-2 ring-offset-1", "ring-current", c?.text) : "bg-card hover:bg-muted",
+                                  )}
+                                >
+                                  {c && <span className={cn("size-2.5 rounded-full", c.dot)} />}
+                                  {o}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : item.type === "dropdown" ? (
                           <select
                             className={nativeSelect}
                             disabled={done}
