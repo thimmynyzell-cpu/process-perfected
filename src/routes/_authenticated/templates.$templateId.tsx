@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   ArrowUp,
   ChevronDown,
+  ChevronRight,
   Copy,
   CornerDownRight,
   GitBranch,
@@ -179,6 +180,28 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   const [dropAt, setDropAt] = useState<{ key: string; after: boolean } | null>(null);
   // Branches shown in full; the others show only their heading.
   const [openLanes, setOpenLanes] = useState<Set<string>>(new Set());
+  // Branches opened big by double-click, outermost first; empty shows the main branch.
+  const [laneFocus, setLaneFocus] = useState<{ owner: string; start: string }[]>([]);
+  // A single click waits briefly so a double-click can open the branch big
+  // instead; otherwise the first click would swap the element under the pointer.
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const laneClick = (id: string, open: boolean) => {
+    if (clickTimer.current) clearTimeout(clickTimer.current);
+    clickTimer.current = setTimeout(() => toggleLane(id, open), 220);
+  };
+  const focusLane = (owner: string, start: string) => {
+    if (clickTimer.current) clearTimeout(clickTimer.current);
+    setLaneFocus((f) => [...f, { owner, start }]);
+    requestAnimationFrame(() => treeRef.current?.scrollTo({ left: 0, top: 0 }));
+  };
+  useEffect(() => {
+    if (!laneFocus.length) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLaneFocus((f) => f.slice(0, -1));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [laneFocus.length]);
   const toggleLane = (id: string, open?: boolean) =>
     setOpenLanes((s) => {
       const next = new Set(s);
@@ -739,10 +762,11 @@ function Editor({ ctx }: { ctx: OrgContext }) {
     if (!open) {
       // Collapsed: only the heading, click to open the branch.
       return (
-        <Hint text={t("flow.openLane")}>
+        <Hint text={t("flow.openLaneHint")}>
           <button
             type="button"
-            onClick={() => toggleLane(id, true)}
+            onClick={() => laneClick(id, true)}
+            onDoubleClick={() => items[l.start] && focusLane(owner.key, items[l.start]!.key)}
             className={cn("rounded-xl border-2 border-dashed px-3 py-2 text-left hover:shadow-soft", color.border, color.bg)}
           >
             {header}
@@ -752,7 +776,13 @@ function Editor({ ctx }: { ctx: OrgContext }) {
     }
     return (
       <section className={cn("w-max rounded-xl border-2 border-dashed p-3", color.border, color.bg)}>
-        <button type="button" className="mb-2" onClick={() => toggleLane(id, false)} aria-expanded>
+        <button
+          type="button"
+          className="mb-2"
+          onClick={() => laneClick(id, false)}
+          onDoubleClick={() => items[l.start] && focusLane(owner.key, items[l.start]!.key)}
+          aria-expanded
+        >
           {header}
         </button>
         <ol className="space-y-4">{renderRange(l.start, l.end, depth + 1)}</ol>
@@ -825,6 +855,19 @@ function Editor({ ctx }: { ctx: OrgContext }) {
       <div />
     </li>
   );
+
+  // The focused branches, resolved against the current questions. A branch
+  // that no longer exists (e.g. its question was deleted) ends the focus there.
+  const focused: { lane: { values: string[]; start: number; end: number }; color: LaneColor; owner: DraftItem }[] = [];
+  for (const f of laneFocus) {
+    const bound = focused.at(-1)?.lane.end ?? items.length;
+    const idx = items.findIndex((i) => i.key === f.owner);
+    const split = idx >= 0 ? lanesOf(laneNodes, idx, bound) : null;
+    const k = split ? split.lanes.findIndex((l) => items[l.start]?.key === f.start) : -1;
+    if (!split || k < 0) break;
+    focused.push({ lane: split.lanes[k]!, color: laneColors(split.lanes)[k]!, owner: items[idx]! });
+  }
+  const current = focused.at(-1);
 
   const renderRange = (from: number, to: number, depth: number): React.ReactNode[] => {
     const out: React.ReactNode[] = [];
@@ -993,10 +1036,65 @@ function Editor({ ctx }: { ctx: OrgContext }) {
           >
             {/* zoom scales layout too, so a zoomed-out tree takes less room instead of just shrinking */}
             <div ref={canvasRef} className="w-max min-w-full p-8" style={{ zoom }}>
-              <ol className="space-y-4">{renderRange(0, items.length, 0)}</ol>
+              {current ? (
+                <div className="mx-auto w-max pt-16">
+                  <div className={cn("mb-4 rounded-xl border-2 border-dashed px-4 py-2", current.color.border, current.color.bg)}>
+                    <p className={cn("flex items-center gap-2 text-sm font-semibold", current.color.text)}>
+                      <span className={cn("size-3 rounded-full", current.color.dot)} />
+                      {current.owner.label || "—"} · {t("flow.if")} {laneLabel(current.lane.values)}
+                    </p>
+                  </div>
+                  <ol className="space-y-4">{renderRange(current.lane.start, current.lane.end, 0)}</ol>
+                  {manage && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => addAt(current.lane.end, items[current.lane.end - 1]?.section ?? current.owner.section)}
+                    >
+                      <Plus className="size-4" /> {t("flow.addInLane")}
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <ol className="space-y-4">{renderRange(0, items.length, 0)}</ol>
+              )}
             </div>
           </div>
           <ZoomBar zoom={zoom} setZoom={setZoom} onFit={fitTree} />
+          {current && (
+            <>
+              <nav
+                className="absolute left-4 top-4 z-10 flex flex-wrap items-center gap-1 rounded-full border bg-card/95 px-2 py-1 text-sm shadow-lg backdrop-blur"
+                aria-label={t("flow.breadcrumb")}
+              >
+                <Button type="button" size="sm" variant="ghost" className="h-8 rounded-full" onClick={() => setLaneFocus([])}>
+                  <ArrowLeft className="size-4" /> {t("flow.mainBranch")}
+                </Button>
+                {focused.map((f, n) => (
+                  <span key={n} className="flex items-center gap-1">
+                    <ChevronRight className="size-3.5 text-muted-foreground" />
+                    <button
+                      type="button"
+                      disabled={n === focused.length - 1}
+                      onClick={() => setLaneFocus((st) => st.slice(0, n + 1))}
+                      className={cn("flex items-center gap-1.5 rounded-full px-2 py-1 font-medium", f.color.text, n < focused.length - 1 && "hover:bg-muted")}
+                    >
+                      <span className={cn("size-2 rounded-full", f.color.dot)} /> {laneLabel(f.lane.values)}
+                    </button>
+                  </span>
+                ))}
+              </nav>
+              <MiniTree
+                items={items}
+                laneNodes={laneNodes}
+                current={current.lane}
+                label={laneLabel}
+                onBack={() => setLaneFocus([])}
+                onFocus={(owner, start) => setLaneFocus([{ owner, start }])}
+              />
+            </>
+          )}
         </div>
 
         {manage && (
@@ -1281,6 +1379,82 @@ function ZoomBar({ zoom, setZoom, onFit }: { zoom: number; setZoom: (z: number) 
           <Maximize2 className="size-4" /> {t("zoom.fit")}
         </Button>
       </Hint>
+    </div>
+  );
+}
+
+/**
+ * The main branch shrunk to an outline while a branch is shown big: the
+ * questions of the main flow, with a chip per branch. Click it to go back.
+ */
+function MiniTree({
+  items,
+  laneNodes,
+  current,
+  label,
+  onBack,
+  onFocus,
+}: {
+  items: DraftItem[];
+  laneNodes: { key: string; section: string; jumps: Record<string, string> }[];
+  current: { start: number; end: number };
+  label: (values: string[]) => string;
+  onBack: () => void;
+  onFocus: (owner: string, start: string) => void;
+}) {
+  const t = useT();
+  const rows: React.ReactNode[] = [];
+  let i = 0;
+  while (i < items.length) {
+    const item = items[i]!;
+    const split = lanesOf(laneNodes, i);
+    const colors = split ? laneColors(split.lanes) : [];
+    rows.push(
+      <li key={item.key}>
+        <p className="truncate">
+          <span className="text-muted-foreground">{i + 1}.</span> {item.label || "—"}
+        </p>
+        {split && (
+          <span className="mt-0.5 flex flex-wrap gap-1 pl-3">
+            {split.lanes.map((l, k) => {
+              const here = l.start === current.start && l.end === current.end;
+              return (
+                <button
+                  key={l.start}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (items[l.start]) onFocus(item.key, items[l.start]!.key);
+                  }}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-1.5 text-[10px]",
+                    colors[k]!.border,
+                    here ? cn(colors[k]!.bg, "font-semibold ring-1 ring-current", colors[k]!.text) : "bg-card",
+                  )}
+                >
+                  <span className={cn("size-1.5 rounded-full", colors[k]!.dot)} /> {label(l.values)}
+                </button>
+              );
+            })}
+          </span>
+        )}
+      </li>,
+    );
+    i = split ? split.merge : i + 1;
+  }
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onBack}
+      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onBack()}
+      title={t("flow.backToMain")}
+      className="absolute right-4 top-4 z-10 max-h-64 w-64 cursor-pointer overflow-y-auto rounded-xl border bg-card/95 p-3 text-xs shadow-lg backdrop-blur hover:border-primary"
+    >
+      <p className="mb-1.5 flex items-center gap-1 font-semibold">
+        <ArrowLeft className="size-3.5" /> {t("flow.mainBranch")}
+      </p>
+      <ol className="space-y-1">{rows}</ol>
     </div>
   );
 }
