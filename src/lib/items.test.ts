@@ -1,4 +1,4 @@
-import { concatItems, pickItems, reorder } from "./items";
+import { applyBaseChange, concatItems, pickItems, reorder } from "./items";
 
 const item = (id: string, position: number, extra = {}) => ({
   id,
@@ -64,5 +64,70 @@ describe("concatItems", () => {
     ]);
     expect(out[2]!.jump_to).toEqual({ Ja: 3 });
     expect(out[3]).toMatchObject({ parent_position: 2, show_when: "Ja" });
+  });
+});
+
+describe("applyBaseChange", () => {
+  const base = (key: string, position: number, label: string, extra = {}) => ({
+    ...item(`b-${key}`, position),
+    item_key: key,
+    label,
+    required: false,
+    ...extra,
+  });
+  const own = (id: string, position: number, label: string, extra = {}) => ({
+    ...item(id, position),
+    item_key: `k-${id}`,
+    base_key: null as string | null,
+    label,
+    required: false,
+    ...extra,
+  });
+
+  const oldBase = [
+    base("A", 0, "Identitet"),
+    base("B", 1, "Ärendenummer"),
+    base("C", 2, "Bekräftelse"),
+  ];
+
+  it("updates linked questions, removes deleted ones and adds new ones after the last linked", () => {
+    const items = [
+      own("1", 0, "Identitet", { base_key: "A" }),
+      own("2", 1, "Ärendenummer", { base_key: "B" }),
+      own("3", 2, "Egen fråga", { jump_to: { true: 3 } }),
+      own("4", 3, "Bekräftelse", { base_key: "C" }),
+    ];
+    const newBase = [
+      base("A", 0, "Kontrollera identitet", { required: true }),
+      base("C", 1, "Bekräftelse"),
+      base("D", 2, "Ny grundfråga"),
+    ];
+    const out = applyBaseChange(items, oldBase, newBase)!;
+    expect(out.map((i) => i.label)).toEqual([
+      "Kontrollera identitet",
+      "Egen fråga",
+      "Bekräftelse",
+      "Ny grundfråga",
+    ]);
+    expect(out[0]).toMatchObject({ required: true, base_key: "A", item_key: "k-1" });
+    // the own question's jump to "Bekräftelse" follows it to its new position
+    expect(out[1]!.jump_to).toEqual({ true: 2 });
+    expect(out[3]).toMatchObject({ base_key: "D", position: 3 });
+    expect(out[3]).not.toHaveProperty("item_key");
+  });
+
+  it("links older copies by their text and returns null when nothing changed", () => {
+    const items = [own("1", 0, "identitet "), own("2", 1, "Ärendenummer", { base_key: "B" })];
+    const same = applyBaseChange(items, oldBase.slice(0, 2), oldBase.slice(0, 2));
+    // nothing changed in content, but the text match gets linked
+    expect(same?.[0]).toMatchObject({ base_key: "A" });
+    const linked = [own("1", 0, "Identitet", { base_key: "A" })];
+    expect(applyBaseChange(linked, [oldBase[0]!], [oldBase[0]!])).toBeNull();
+  });
+
+  it("leaves checklists that don't use the base alone", () => {
+    expect(applyBaseChange([own("1", 0, "Helt annan")], oldBase, oldBase)).toBeNull();
+    const withNew = [...oldBase, base("D", 3, "Ny grundfråga")];
+    expect(applyBaseChange([own("1", 0, "Helt annan")], oldBase, withNew)).toBeNull();
   });
 });

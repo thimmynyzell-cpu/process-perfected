@@ -254,6 +254,7 @@ export const translations = {
     "templates.baseItems": "Frågor: {count}",
     "templates.baseCreate": "Skapa grundchecklista",
     "templates.baseGeneral": "Gemensam för alla mappar",
+    "templates.basePropagated": "Ändringarna fördes över till {count} checklistor som använder grundchecklistan.",
     "templates.baseForFolder": "För mappen {folder}",
     "templates.baseNeedsMigration": "Det finns redan en grundchecklista. Kör den senaste databasändringen för att kunna ha en per mapp.",
     "templates.folders": "Mappar",
@@ -265,7 +266,7 @@ export const translations = {
     "templates.search": "Sök checklista",
     "templates.baseInclude": "Frågor från grundchecklistan ({count} av {total})",
     "templates.baseEditorNote":
-      "Det här är grundchecklistan. Ändringar här påverkar nya checklistor som skapas framöver, inte befintliga.",
+      "Det här är en grundchecklista. När du sparar förs ändringarna även över till checklistorna som använder den.",
     "history.template": "Checklista",
     "dashboard.viewAll": "Visa alla",
   },
@@ -523,6 +524,7 @@ export const translations = {
     "templates.baseItems": "Questions: {count}",
     "templates.baseCreate": "Create base checklist",
     "templates.baseGeneral": "Shared by all folders",
+    "templates.basePropagated": "The changes were applied to {count} checklists that use the base checklist.",
     "templates.baseForFolder": "For the folder {folder}",
     "templates.baseNeedsMigration": "A base checklist already exists. Run the latest database change to have one per folder.",
     "templates.folders": "Folders",
@@ -534,7 +536,7 @@ export const translations = {
     "templates.search": "Search checklists",
     "templates.baseInclude": "Questions from the base checklist ({count} of {total})",
     "templates.baseEditorNote":
-      "This is the base checklist. Changes here apply to checklists created from now on, not existing ones.",
+      "This is a base checklist. When you save, the changes are also applied to the checklists that use it.",
     "history.template": "Checklist",
     "dashboard.viewAll": "View all",
   },

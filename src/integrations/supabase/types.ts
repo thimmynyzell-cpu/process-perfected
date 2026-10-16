@@ -296,8 +296,10 @@ export type Database = {
         Row: {
           allow_note: boolean
           allow_photo: boolean
+          base_key: string | null
           help_text: string | null
           id: string
+          item_key: string
           jump_to: Json
           label: string
           levels: string[]
@@ -314,8 +316,10 @@ export type Database = {
         Insert: {
           allow_note?: boolean
           allow_photo?: boolean
+          base_key?: string | null
           help_text?: string | null
           id?: string
+          item_key?: string
           jump_to?: Json
           label: string
           levels?: string[]
@@ -332,8 +336,10 @@ export type Database = {
         Update: {
           allow_note?: boolean
           allow_photo?: boolean
+          base_key?: string | null
           help_text?: string | null
           id?: string
+          item_key?: string
           jump_to?: Json
           label?: string
           levels?: string[]

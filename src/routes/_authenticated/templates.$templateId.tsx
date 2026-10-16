@@ -19,8 +19,8 @@ import { OptionRows } from "@/components/OptionRows";
 import { Hint } from "@/components/Hint";
 import { branchValues, jumpKeys, type FlowNode } from "@/lib/flow";
 import { LEVELS, type Level } from "@/lib/levels";
-import { reorder } from "@/lib/items";
-import { currentVersionId, nextVersionNumber } from "@/lib/versions";
+import { currentVersionId, writeVersion } from "@/lib/versions";
+import { applyBaseChange, folderOf, reorder } from "@/lib/items";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -51,6 +51,8 @@ type DraftItem = {
   jumps: Record<string, string>;
   /** Experience levels the question is shown to. */
   levels: Level[];
+  /** item_key of the base checklist question this one was copied from, or "". */
+  baseKey: string;
 };
 
 const optList = (s: string) => s.split("\n").map((o) => o.trim()).filter(Boolean);
@@ -111,14 +113,16 @@ function Editor({ ctx }: { ctx: OrgContext }) {
     if (!query.data) return;
     const { tpl, items } = query.data;
     setMeta({ title: tpl.title, description: tpl.description ?? "", category: tpl.category ?? "" });
-    const posKey = new Map(items.map((i) => [i.position, i.id]));
+    const posKey = new Map(items.map((i) => [i.position, i.item_key ?? i.id]));
     setItems(
       items.map((i) => ({
         parent: i.parent_position != null ? (posKey.get(i.parent_position) ?? "") : "",
         show_when: i.show_when ?? "",
         jumps: jumpKeys(i.jump_to, posKey),
         levels: Array.isArray(i.levels) ? LEVELS.filter((l) => i.levels.includes(l)) : [...LEVELS],
-        key: i.id,
+        // item_key stays the same across versions; older databases only have id.
+        key: i.item_key ?? i.id,
+        baseKey: i.base_key ?? "",
         section: i.section ?? "",
         type: i.type,
         label: i.label,
@@ -172,7 +176,8 @@ function Editor({ ctx }: { ctx: OrgContext }) {
       return next;
     });
   const duplicate = (idx: number) => {
-    const copy = { ...items[idx]!, key: crypto.randomUUID(), jumps: { ...items[idx]!.jumps }, levels: [...items[idx]!.levels] };
+    const src = items[idx]!;
+    const copy = { ...src, key: crypto.randomUUID(), baseKey: "", jumps: { ...src.jumps }, levels: [...src.levels] };
     setItems((list) => [...list.slice(0, idx + 1), copy, ...list.slice(idx + 1)]);
     jumpToItem(copy.key);
   };
@@ -188,6 +193,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
       ...list,
       {
         key: crypto.randomUUID(),
+        baseKey: "",
         section: list.at(-1)?.section ?? "",
         type: "checkbox",
         label: "",
@@ -203,89 +209,106 @@ function Editor({ ctx }: { ctx: OrgContext }) {
       },
     ]);
 
+  /**
+   * Passes a saved base checklist's changes on to the checklists that use it:
+   * every checklist for the general base, the folder's checklists for a folder base.
+   */
+  async function propagateBase(
+    base: { id: string; category: string | null },
+    oldItems: Database["public"]["Tables"]["template_items"]["Row"][],
+    newItems: { item_key: string; label: string; position: number }[],
+    messages: Parameters<typeof writeVersion>[0]["messages"],
+  ) {
+    // Without stable question keys (older database) changes can't be matched.
+    if (oldItems.some((i) => !i.item_key)) return 0;
+    const { data: targets } = await supabase
+      .from("templates")
+      .select("id, category, current_version, delete_after")
+      .eq("org_id", ctx.orgId)
+      .eq("is_base", false);
+    let updated = 0;
+    for (const target of targets ?? []) {
+      if (target.delete_after) continue;
+      if (folderOf(base.category) && folderOf(target.category) !== folderOf(base.category)) continue;
+      const verId = await currentVersionId(target.id, target.current_version);
+      if (!verId) continue;
+      const { data: current } = await supabase.from("template_items").select("*").eq("version_id", verId);
+      const next = applyBaseChange(
+        (current ?? []).map((i) => ({ ...i, item_key: i.item_key })),
+        oldItems.map((i) => ({ ...i })),
+        newItems.map((i) => ({ ...i, id: i.item_key, parent_position: null, show_when: null })),
+      );
+      if (!next) continue;
+      await writeVersion({
+        templateId: target.id,
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+        currentVersion: target.current_version,
+        rows: next.map(({ version_id: _v, org_id: _o, ...r }) => r),
+        messages,
+      });
+      await logAudit(ctx.orgId, ctx.userId, "template.updated_from_base", "template", target.id, { base: base.id });
+      updated++;
+    }
+    return updated;
+  }
+
   async function save() {
     if (!meta.title.trim()) return;
     setSaving(true);
-    // A version row inserted by this save, removed again if the save fails.
-    let pending: string | null = null;
     try {
       const tpl = query.data!.tpl;
-      const nextVersion = await nextVersionNumber(tpl.id, tpl.current_version);
-      const { data: ver, error } = await supabase
-        .from("template_versions")
-        .insert({ template_id: tpl.id, org_id: ctx.orgId, version: nextVersion, created_by: ctx.userId })
-        .select()
-        .single();
-      if (error) throw error;
-      pending = ver.id;
       const kept = items.filter((i) => i.label.trim());
       // Questions without text are skipped; say so if they had other content.
       const skipped = items.filter((i) => !i.label.trim() && (optList(i.options).length || i.help_text.trim())).length;
       if (skipped) toast.warning(t("templates.skippedNoText", { count: skipped }));
       const keyPos = new Map(kept.map((i, idx) => [i.key, idx]));
-      const rows = kept
-        .map((i, position) => ({
-          parent_position: i.parent && i.show_when && keyPos.has(i.parent) ? keyPos.get(i.parent)! : null,
-          show_when: i.parent && i.show_when && keyPos.has(i.parent) ? i.show_when : null,
-          // Keep jumps to items that still exist, come later, and use a current answer value.
-          jump_to: Object.fromEntries(
-            Object.entries(i.jumps).flatMap(([v, key]) => {
-              const target = keyPos.get(key);
-              const valid = branchValues(i.type, optList(i.options)).includes(v);
-              return valid && target !== undefined && target > position ? [[v, target]] : [];
-            }),
-          ),
-          levels: i.levels,
-          version_id: ver.id,
-          org_id: ctx.orgId,
-          position,
-          section: i.section.trim() || null,
-          type: i.type,
-          label: i.label.trim(),
-          help_text: i.help_text.trim() || null,
-          required: i.required,
-          allow_note: i.allow_note,
-          allow_photo: i.allow_photo,
-          options:
-            i.type === "dropdown" || i.type === "checkbox" ? optList(i.options) : [],
-        }));
-      if (rows.length) {
-        // Databases without the jump or level migrations reject those columns;
-        // drop the rejected column and save the rest.
-        let payload: Record<string, unknown>[] = rows;
-        let dropped = false;
-        let e2 = null;
-        for (let attempt = 0; attempt < 3; attempt++) {
-          ({ error: e2 } = await supabase.from("template_items").insert(payload as typeof rows));
-          const col = e2 && ["jump_to", "levels"].find((c) => e2!.message.includes(c));
-          if (!col) break;
-          payload = payload.map(({ [col]: _drop, ...rest }) => rest);
-          dropped = true;
-        }
-        if (e2) throw e2;
-        if (dropped) toast.warning(t("flow.jumpsNotSaved"));
-        // Row level security can drop rows without an error; confirm they landed.
-        const { count } = await supabase
-          .from("template_items")
-          .select("id", { count: "exact", head: true })
-          .eq("version_id", ver.id);
-        if (count !== rows.length) throw new Error(t("templates.saveItemsMissing", { saved: count ?? 0, total: rows.length }));
-      }
-      const { data: updated, error: e3 } = await supabase
-        .from("templates")
-        .update({
+      const rows = kept.map((i, position) => ({
+        item_key: i.key,
+        base_key: i.baseKey || null,
+        parent_position: i.parent && i.show_when && keyPos.has(i.parent) ? keyPos.get(i.parent)! : null,
+        show_when: i.parent && i.show_when && keyPos.has(i.parent) ? i.show_when : null,
+        // Keep jumps to items that still exist, come later, and use a current answer value.
+        jump_to: Object.fromEntries(
+          Object.entries(i.jumps).flatMap(([v, key]) => {
+            const target = keyPos.get(key);
+            const valid = branchValues(i.type, optList(i.options)).includes(v);
+            return valid && target !== undefined && target > position ? [[v, target]] : [];
+          }),
+        ),
+        levels: i.levels,
+        position,
+        section: i.section.trim() || null,
+        type: i.type,
+        label: i.label.trim(),
+        help_text: i.help_text.trim() || null,
+        required: i.required,
+        allow_note: i.allow_note,
+        allow_photo: i.allow_photo,
+        options: i.type === "dropdown" || i.type === "checkbox" ? optList(i.options) : [],
+      }));
+      const messages = {
+        itemsMissing: (saved: number, total: number) => t("templates.saveItemsMissing", { saved, total }),
+        notApplied: t("templates.saveNotApplied"),
+      };
+      const { version: nextVersion, dropped } = await writeVersion({
+        templateId: tpl.id,
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+        currentVersion: tpl.current_version,
+        rows,
+        patch: {
           title: meta.title.trim(),
           description: meta.description || null,
-          category: meta.category || null,
-          current_version: nextVersion,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", tpl.id)
-        .select("id");
-      if (e3) throw e3;
-      // An update blocked by row level security returns no rows and no error.
-      if (!updated?.length) throw new Error(t("templates.saveNotApplied"));
-      pending = null;
+          category: meta.category.trim() || null,
+        },
+        messages,
+      });
+      if (dropped.some((c) => c === "jump_to" || c === "levels")) toast.warning(t("flow.jumpsNotSaved"));
+      if (tpl.is_base) {
+        const n = await propagateBase(tpl, query.data!.items, rows, messages);
+        if (n) toast.success(t("templates.basePropagated", { count: n }));
+      }
       await logAudit(ctx.orgId, ctx.userId, "template.updated", "template", tpl.id, {
         title: meta.title,
         version: nextVersion,
@@ -294,7 +317,6 @@ function Editor({ ctx }: { ctx: OrgContext }) {
       qc.invalidateQueries({ queryKey: ["template", templateId] });
       qc.invalidateQueries({ queryKey: ["templates", ctx.orgId] });
     } catch (err) {
-      if (pending) await supabase.from("template_versions").delete().eq("id", pending);
       // Supabase errors are plain objects with a message, not Error instances.
       const message = (err as { message?: unknown })?.message;
       toast.error(typeof message === "string" && message ? message : t("error.generic"));

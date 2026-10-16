@@ -164,8 +164,13 @@ function Templates({ ctx }: { ctx: OrgContext }) {
       let items: Awaited<ReturnType<typeof latestItems>> = [];
       for (const b of basesFor(folderOf(form.category))) items = concatItems(items, pickItems(await latestItems(b), baseKeep));
       if (items.length) {
+        // Copies get their own keys and remember the base question they came from.
         await supabase.from("template_items").insert(
-          items.map(({ id: _id, version_id: _v, ...rest }) => ({ ...rest, version_id: ver.id })),
+          items.map(({ id: _id, version_id: _v, item_key, base_key: _b, ...rest }) => ({
+            ...rest,
+            ...(item_key ? { base_key: item_key } : {}),
+            version_id: ver.id,
+          })),
         );
       }
     }
@@ -199,7 +204,7 @@ function Templates({ ctx }: { ctx: OrgContext }) {
       const { data: items } = await supabase.from("template_items").select("*").eq("version_id", verId);
       if (items?.length) {
         await supabase.from("template_items").insert(
-          items.map(({ id: _id, version_id: _v, ...rest }) => ({ ...rest, version_id: newVer.id })),
+          items.map(({ id: _id, version_id: _v, item_key: _k, ...rest }) => ({ ...rest, version_id: newVer.id })),
         );
       }
     }
