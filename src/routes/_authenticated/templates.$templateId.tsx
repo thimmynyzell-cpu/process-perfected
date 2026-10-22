@@ -11,6 +11,7 @@ import {
   CornerDownRight,
   GitBranch,
   GripVertical,
+  ListTree,
   Network,
   Plus,
   Trash2,
@@ -27,7 +28,8 @@ import { LEVELS, type Level } from "@/lib/levels";
 import { sectionOrder } from "@/lib/sections";
 import { laneColors, type LaneColor } from "@/lib/laneColors";
 import { currentVersionId, writeVersion } from "@/lib/versions";
-import { applyBaseChange, folderOf, reorder } from "@/lib/items";
+import { applyBaseChange, folderOf } from "@/lib/items";
+import { MAIN, buildTree, containerOf, moveItem, type TreeRow } from "@/lib/treeMove";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -180,6 +182,9 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   const [dropAt, setDropAt] = useState<{ key: string; after: boolean } | null>(null);
   // Branches shown in full; the others show only their heading.
   const [openLanes, setOpenLanes] = useState<Set<string>>(new Set());
+  // A collapsed branch heading the dragged question hovers over.
+  const [dropLane, setDropLane] = useState<string | null>(null);
+  const [treeMenu, setTreeMenu] = useState(false);
   // Branches opened big by double-click, outermost first; empty shows the main branch.
   const [laneFocus, setLaneFocus] = useState<{ owner: string; start: string }[]>([]);
   // A single click waits briefly so a double-click can open the branch big
@@ -309,7 +314,21 @@ function Editor({ ctx }: { ctx: OrgContext }) {
     setDragArmed(null);
     setDragKey(null);
     setDropAt(null);
+    setDropLane(null);
   };
+  /**
+   * Drops `key` before or after the question `at`, in whatever branch `at`
+   * sits in, keeping jumps and merge points pointing at the same branches.
+   */
+  const dropNextTo = (key: string, at: string, after: boolean) =>
+    setItems((list) => {
+      const c = containerOf(list, at);
+      if (!c) return list;
+      const pos = c.rows.findIndex((r) => r.key === at);
+      const before = after ? (c.rows[pos + 1]?.key ?? null) : at;
+      return moveItem(list, key, c.id, before === key ? null : before);
+    });
+  const dropInLane = (key: string, lane: string) => setItems((list) => moveItem(list, key, lane, null));
 
   const newItem = (section: string): DraftItem => ({
     key: crypto.randomUUID(),
@@ -523,7 +542,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
               }}
               onDrop={(e) => {
                 e.preventDefault();
-                if (dragKey && dropAt) setItems((list) => reorder(list, dragKey, dropAt.key, dropAt.after));
+                if (dragKey && dropAt) dropNextTo(dragKey, dropAt.key, dropAt.after);
                 endDrag();
               }}
               onDragEnd={endDrag}
@@ -767,7 +786,24 @@ function Editor({ ctx }: { ctx: OrgContext }) {
             type="button"
             onClick={() => laneClick(id, true)}
             onDoubleClick={() => items[l.start] && focusLane(owner.key, items[l.start]!.key)}
-            className={cn("rounded-xl border-2 border-dashed px-3 py-2 text-left hover:shadow-soft", color.border, color.bg)}
+            // Drop a question on a collapsed branch to put it last in that branch.
+            onDragOver={(e) => {
+              if (!dragKey) return;
+              e.preventDefault();
+              setDropLane(id);
+            }}
+            onDragLeave={() => setDropLane((d) => (d === id ? null : d))}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragKey) dropInLane(dragKey, id);
+              endDrag();
+            }}
+            className={cn(
+              "rounded-xl border-2 border-dashed px-3 py-2 text-left hover:shadow-soft",
+              color.border,
+              color.bg,
+              dropLane === id && "ring-2 ring-primary ring-offset-2",
+            )}
           >
             {header}
           </button>
@@ -1062,6 +1098,40 @@ function Editor({ ctx }: { ctx: OrgContext }) {
             </div>
           </div>
           <ZoomBar zoom={zoom} setZoom={setZoom} onFit={fitTree} />
+          <div className={cn("absolute left-4 z-20", current ? "top-16" : "top-4")}>
+            <Hint text={t("tree.toggleHint")}>
+              <Button
+                type="button"
+                size="sm"
+                variant={treeMenu ? "default" : "outline"}
+                className="rounded-full shadow-lg"
+                onClick={() => setTreeMenu((v) => !v)}
+                aria-expanded={treeMenu}
+              >
+                <ListTree className="size-4" /> {t("tree.title")}
+              </Button>
+            </Hint>
+            {treeMenu && (
+              <TreeMenu
+                items={items}
+                manage={manage}
+                dragKey={dragKey}
+                setDragKey={setDragKey}
+                label={laneLabel}
+                onMove={(key, container, before) => setItems((list) => moveItem(list, key, container, before))}
+                onShow={(key) => {
+                  // Open every branch on the way to the question, then show it.
+                  const path: string[] = [];
+                  const find = (rows: TreeRow[]): boolean =>
+                    rows.some((r) => r.key === key || r.lanes.some((l) => (find(l.rows) ? (path.push(l.id), true) : false)));
+                  find(buildTree(laneNodes));
+                  path.forEach((id) => toggleLane(id, true));
+                  setLaneFocus([]);
+                  jumpToItem(key);
+                }}
+              />
+            )}
+          </div>
           {current && (
             <>
               <nav
@@ -1455,6 +1525,123 @@ function MiniTree({
         <ArrowLeft className="size-3.5" /> {t("flow.mainBranch")}
       </p>
       <ol className="space-y-1">{rows}</ol>
+    </div>
+  );
+}
+
+/**
+ * The whole tree as a nested list beside the canvas. Questions can be dragged
+ * onto another question (before or after it, in its branch) or onto a branch
+ * heading (last in that branch); clicking one shows it on the canvas.
+ */
+function TreeMenu({
+  items,
+  manage,
+  dragKey,
+  setDragKey,
+  label,
+  onMove,
+  onShow,
+}: {
+  items: DraftItem[];
+  manage: boolean;
+  dragKey: string | null;
+  setDragKey: (key: string | null) => void;
+  label: (values: string[]) => string;
+  onMove: (key: string, container: string, before: string | null) => void;
+  onShow: (key: string) => void;
+}) {
+  const t = useT();
+  const nodes = items.map((i) => ({ key: i.key, section: i.section, jumps: i.jumps }));
+  const tree = buildTree(nodes);
+  const number = new Map(items.map((i, n) => [i.key, n + 1]));
+  const byKey = new Map(items.map((i) => [i.key, i]));
+  // Drop marker: before a question, or at the end of a container.
+  const [over, setOver] = useState<{ container: string; before: string | null } | null>(null);
+  const drop = (e: React.DragEvent, container: string, before: string | null) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dragKey && before !== dragKey) onMove(dragKey, container, before);
+    setOver(null);
+    setDragKey(null);
+  };
+  const dragOver = (e: React.DragEvent, container: string, before: string | null) => {
+    if (!dragKey) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (over?.container !== container || over.before !== before) setOver({ container, before });
+  };
+
+  const list = (rows: TreeRow[], container: string, depth: number): React.ReactNode => (
+    <ol className={cn("space-y-0.5", depth > 0 && "ml-3 border-l pl-2")}>
+      {rows.map((r, n) => {
+        const item = byKey.get(r.key)!;
+        const below = rows[n + 1]?.key ?? null;
+        const colors = laneColors(r.lanes);
+        return (
+          <li key={r.key}>
+            {over?.container === container && over.before === r.key && <span className="block h-0.5 rounded bg-primary" />}
+            <div
+              draggable={manage}
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", r.key);
+                setDragKey(r.key);
+              }}
+              onDragEnd={() => {
+                setDragKey(null);
+                setOver(null);
+              }}
+              onDragOver={(e) => {
+                const box = e.currentTarget.getBoundingClientRect();
+                dragOver(e, container, e.clientY > box.top + box.height / 2 ? below : r.key);
+              }}
+              onDrop={(e) => drop(e, container, over?.container === container ? over.before : r.key)}
+              onClick={() => onShow(r.key)}
+              title={t("tree.dragHint")}
+              className={cn(
+                "flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 hover:bg-muted",
+                manage && "active:cursor-grabbing",
+                dragKey === r.key && "opacity-40",
+              )}
+            >
+              {manage && <GripVertical className="size-3 shrink-0 text-muted-foreground" />}
+              <span className="shrink-0 text-muted-foreground tabular-nums">{number.get(r.key)}.</span>
+              <span className="truncate">{item.label || "—"}</span>
+            </div>
+            {r.lanes.map((l, k) => (
+              <div key={l.id} className="ml-3">
+                <div
+                  onDragOver={(e) => dragOver(e, l.id, null)}
+                  onDrop={(e) => drop(e, l.id, null)}
+                  className={cn(
+                    "mt-0.5 flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[11px] font-semibold",
+                    colors[k]!.text,
+                    over?.container === l.id && over.before === null && "bg-primary/10 ring-1 ring-primary",
+                  )}
+                  title={t("tree.dropHere")}
+                >
+                  <span className={cn("size-2 rounded-full", colors[k]!.dot)} />
+                  {t("flow.if")} {label(l.values)}
+                </div>
+                {list(l.rows, l.id, depth + 1)}
+              </div>
+            ))}
+          </li>
+        );
+      })}
+      <li
+        onDragOver={(e) => dragOver(e, container, null)}
+        onDrop={(e) => drop(e, container, null)}
+        className={cn("h-2 rounded", over?.container === container && over.before === null && "h-1 bg-primary")}
+      />
+    </ol>
+  );
+
+  return (
+    <div className="mt-2 max-h-[60vh] w-72 overflow-y-auto rounded-xl border bg-card/95 p-3 text-xs shadow-lg backdrop-blur">
+      <p className="mb-1.5 font-semibold">{t("tree.main")}</p>
+      {list(tree, MAIN, 0)}
     </div>
   );
 }
