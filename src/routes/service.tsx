@@ -6,9 +6,8 @@ import { Label } from "@/components/ui/label";
 import {
   EXTRA_SERVICES,
   KM_INTERVALS,
-  kmIntervalsFor,
+  kmHits,
   monthsToYear,
-  roundKm,
   servicesForYear,
 } from "@/lib/serviceSchedule";
 
@@ -34,7 +33,7 @@ function ServicePage() {
   const due = year === null ? [] : servicesForYear(year);
   const kmValue = Number(km.replace(/\s/g, "").replace(",", "."));
   const kmValid = km.trim() !== "" && Number.isFinite(kmValue) && kmValue >= 0;
-  const kmDue = kmValid ? kmIntervalsFor(kmValue) : [];
+  const kmDue = kmValid ? KM_INTERVALS.filter((n) => kmHits(kmValue, n).length > 0) : [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -72,10 +71,8 @@ function ServicePage() {
         {kmValid && (
           <section className="mt-6 rounded-lg border p-4">
             <p className="text-sm text-muted-foreground">
-              {kmValue.toLocaleString("sv-SE")} km ≈{" "}
-              <span className="font-semibold text-foreground">
-                {roundKm(kmValue).toLocaleString("sv-SE")} km
-              </span>
+              Intervall mellan {Math.max(0, kmValue - 10_000).toLocaleString("sv-SE")} och{" "}
+              {(kmValue + 10_000).toLocaleString("sv-SE")} km
             </p>
             {kmDue.length === 0 ? (
               <p className="mt-3 font-medium">Inga körsträcksintervall träffar.</p>
@@ -102,6 +99,15 @@ function ServicePage() {
                         {on ? "✓" : ""}
                       </span>
                       Var {n.toLocaleString("sv-SE")} km
+                      {on && (
+                        <span className="text-sm font-normal text-muted-foreground">
+                          (
+                          {kmHits(kmValue, n)
+                            .map((m) => m.toLocaleString("sv-SE"))
+                            .join(", ")}
+                          )
+                        </span>
+                      )}
                     </li>
                   );
                 })}

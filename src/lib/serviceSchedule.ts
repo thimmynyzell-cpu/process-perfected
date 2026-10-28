@@ -26,12 +26,14 @@ export function servicesForYear(year: number): ExtraService[] {
 export const KM_STEP = 10_000;
 export const KM_INTERVALS: number[] = Array.from({ length: 15 }, (_, i) => (i + 1) * KM_STEP);
 
-// Mätarställningen räknas som närmaste 10 000 km (±5 000 km), halva uppåt.
-export function roundKm(km: number): number {
-  return Math.max(0, Math.round(km / KM_STEP) * KM_STEP);
-}
-
-export function kmIntervalsFor(km: number): number[] {
-  const rounded = roundKm(km);
-  return rounded === 0 ? [] : KM_INTERVALS.filter((n) => rounded % n === 0);
+// Alla mätarställningar där intervallet infaller inom ±10 000 km från kundens
+// mätarställning (gränserna räknas med).
+export function kmHits(km: number, interval: number): number[] {
+  const lo = Math.max(0, km - KM_STEP);
+  const hi = km + KM_STEP;
+  const hits: number[] = [];
+  for (let m = Math.max(interval, Math.ceil(lo / interval) * interval); m <= hi; m += interval) {
+    hits.push(m);
+  }
+  return hits;
 }

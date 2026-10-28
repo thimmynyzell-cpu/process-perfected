@@ -1,4 +1,4 @@
-import { kmIntervalsFor, monthsToYear, roundKm, servicesForYear } from "./serviceSchedule";
+import { kmHits, KM_INTERVALS, monthsToYear, servicesForYear } from "./serviceSchedule";
 
 const labels = (year: number) => servicesForYear(year).map((s) => s.label);
 
@@ -22,15 +22,18 @@ describe("servicesForYear", () => {
   });
 });
 
-describe("kmIntervalsFor", () => {
-  it("rounds the odometer to the nearest 10 000 km", () => {
-    expect(roundKm(94_999)).toBe(90_000);
-    expect(roundKm(95_000)).toBe(100_000);
+describe("kmHits", () => {
+  const hitting = (km: number) => KM_INTERVALS.filter((n) => kmHits(km, n).length > 0);
+
+  it("takes everything that falls between km-10 000 and km+10 000", () => {
+    expect(hitting(90_000)).toEqual([
+      10_000, 20_000, 30_000, 40_000, 50_000, 80_000, 90_000, 100_000,
+    ]);
+    expect(kmHits(90_000, 20_000)).toEqual([80_000, 100_000]);
+    expect(kmHits(90_000, 60_000)).toEqual([]);
   });
-  it("returns every interval that the rounded reading hits", () => {
-    expect(kmIntervalsFor(5_000 - 1)).toEqual([]);
-    expect(kmIntervalsFor(10_000)).toEqual([10_000]);
-    expect(kmIntervalsFor(60_000)).toEqual([10_000, 20_000, 30_000, 60_000]);
-    expect(kmIntervalsFor(150_000)).toEqual([10_000, 30_000, 50_000, 150_000]);
+  it("never counts km 0", () => {
+    expect(hitting(0)).toEqual([10_000]);
+    expect(kmHits(5_000, 10_000)).toEqual([10_000]);
   });
 });
