@@ -21,3 +21,17 @@ export function servicesForYear(year: number): ExtraService[] {
     (s) => year >= s.firstYear && (year - s.firstYear) % s.everyYears === 0,
   );
 }
+
+// Körsträcksintervall: varje 10 000 km, 20 000 km … upp till 150 000 km.
+export const KM_STEP = 10_000;
+export const KM_INTERVALS: number[] = Array.from({ length: 15 }, (_, i) => (i + 1) * KM_STEP);
+
+// Mätarställningen räknas som närmaste 10 000 km (±5 000 km), halva uppåt.
+export function roundKm(km: number): number {
+  return Math.max(0, Math.round(km / KM_STEP) * KM_STEP);
+}
+
+export function kmIntervalsFor(km: number): number[] {
+  const rounded = roundKm(km);
+  return rounded === 0 ? [] : KM_INTERVALS.filter((n) => rounded % n === 0);
+}

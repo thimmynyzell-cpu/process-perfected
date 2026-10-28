@@ -3,7 +3,14 @@ import { useState } from "react";
 import { Wrench } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { EXTRA_SERVICES, monthsToYear, servicesForYear } from "@/lib/serviceSchedule";
+import {
+  EXTRA_SERVICES,
+  KM_INTERVALS,
+  kmIntervalsFor,
+  monthsToYear,
+  roundKm,
+  servicesForYear,
+} from "@/lib/serviceSchedule";
 
 export const Route = createFileRoute("/service")({
   head: () => ({
@@ -20,10 +27,14 @@ export const Route = createFileRoute("/service")({
 
 function ServicePage() {
   const [months, setMonths] = useState("");
+  const [km, setKm] = useState("");
   const value = Number(months.replace(",", "."));
   const valid = months.trim() !== "" && Number.isFinite(value) && value >= 0;
   const year = valid ? monthsToYear(value) : null;
   const due = year === null ? [] : servicesForYear(year);
+  const kmValue = Number(km.replace(/\s/g, "").replace(",", "."));
+  const kmValid = km.trim() !== "" && Number.isFinite(kmValue) && kmValue >= 0;
+  const kmDue = kmValid ? kmIntervalsFor(kmValue) : [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -46,6 +57,58 @@ function ServicePage() {
             onChange={(e) => setMonths(e.target.value)}
           />
         </div>
+
+        <div className="mt-6 space-y-2">
+          <Label htmlFor="km">Mätarställning (km)</Label>
+          <Input
+            id="km"
+            inputMode="numeric"
+            placeholder="t.ex. 60000"
+            value={km}
+            onChange={(e) => setKm(e.target.value)}
+          />
+        </div>
+
+        {kmValid && (
+          <section className="mt-6 rounded-lg border p-4">
+            <p className="text-sm text-muted-foreground">
+              {kmValue.toLocaleString("sv-SE")} km ≈{" "}
+              <span className="font-semibold text-foreground">
+                {roundKm(kmValue).toLocaleString("sv-SE")} km
+              </span>
+            </p>
+            {kmDue.length === 0 ? (
+              <p className="mt-3 font-medium">Inga körsträcksintervall träffar.</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {KM_INTERVALS.map((n) => {
+                  const on = kmDue.includes(n);
+                  return (
+                    <li
+                      key={n}
+                      className={
+                        on
+                          ? "flex items-center gap-2 font-medium"
+                          : "flex items-center gap-2 text-muted-foreground"
+                      }
+                    >
+                      <span
+                        className={
+                          on
+                            ? "flex size-5 items-center justify-center rounded bg-primary text-xs text-primary-foreground"
+                            : "size-5 rounded border"
+                        }
+                      >
+                        {on ? "✓" : ""}
+                      </span>
+                      Var {n.toLocaleString("sv-SE")} km
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        )}
 
         {year !== null && (
           <section className="mt-6 rounded-lg border p-4">
