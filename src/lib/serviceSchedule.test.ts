@@ -1,4 +1,11 @@
-import { isHalfYear, kmHits, KM_INTERVALS, monthsToYear, servicesForYear } from "./serviceSchedule";
+import {
+  isHalfYear,
+  yearChoices,
+  kmHits,
+  KM_INTERVALS,
+  monthsToYear,
+  servicesForYear,
+} from "./serviceSchedule";
 
 const labels = (year: number) => servicesForYear(year).map((s) => s.label);
 
@@ -8,6 +15,15 @@ describe("monthsToYear", () => {
     expect(monthsToYear(41)).toBe(3);
     expect(monthsToYear(42)).toBe(4);
     expect(monthsToYear(3)).toBe(0);
+  });
+});
+
+describe("yearChoices", () => {
+  it("offers the year below and above unless the months are a whole year", () => {
+    expect(yearChoices(42)).toEqual([3, 4]);
+    expect(yearChoices(140)).toEqual([11, 12]);
+    expect(yearChoices(144)).toEqual([12]);
+    expect(yearChoices(5)).toEqual([0, 1]);
   });
 });
 

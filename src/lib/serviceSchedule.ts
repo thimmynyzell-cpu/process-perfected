@@ -16,6 +16,14 @@ export function monthsToYear(months: number): number {
   return Math.max(0, Math.round(months / 12));
 }
 
+// Åren att välja mellan: det hela året under och över, eller bara året om antalet
+// månader går jämnt ut. Det närmaste året står sist vid ett halvt år (uppåt).
+export function yearChoices(months: number): number[] {
+  const m = Math.max(0, months);
+  const lower = Math.floor(m / 12);
+  return m % 12 === 0 ? [lower] : [lower, lower + 1];
+}
+
 // Exakt mitt emellan två år (6 månader över ett helt år), t.ex. 42 månader.
 export function isHalfYear(months: number): boolean {
   return months >= 0 && months % 12 === 6;
