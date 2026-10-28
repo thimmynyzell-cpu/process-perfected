@@ -1,5 +1,7 @@
 import {
   ageRule,
+  manualHits,
+  occurrenceFrom,
   occurrenceNumber,
   ordinal,
   EXTRA_SERVICES,
@@ -135,5 +137,49 @@ describe("ordinal", () => {
       "22:a",
       "23:e",
     ]);
+  });
+});
+
+describe("manualHits", () => {
+  const manual = { monthFirst: 120, monthEvery: 60, kmFirst: 35_000, kmEvery: 120_000 };
+
+  it("counts 120 months and then every 60 months", () => {
+    expect(manualHits(manual, { year: 10, km: null }).months).toEqual([120]);
+    expect(manualHits(manual, { year: 11, km: null }).months).toEqual([]);
+    expect(manualHits(manual, { year: 15, km: null }).months).toEqual([180]);
+  });
+
+  it("counts 35 000 km and then every 120 000 km, within ±10 000 km", () => {
+    expect(manualHits(manual, { year: null, km: 40_000 }).km).toEqual([35_000]);
+    expect(manualHits(manual, { year: null, km: 100_000 }).km).toEqual([]);
+    expect(manualHits(manual, { year: null, km: 150_000 }).km).toEqual([155_000]);
+  });
+
+  it("handles months and km on the same interval", () => {
+    expect(manualHits(manual, { year: 10, km: 40_000 })).toEqual({ months: [120], km: [35_000] });
+  });
+
+  it("gives only the first occurrence when no interval follows", () => {
+    const once = { monthFirst: 120, monthEvery: null, kmFirst: null, kmEvery: null };
+    expect(manualHits(once, { year: 10, km: 1 })).toEqual({ months: [120], km: null });
+    expect(manualHits(once, { year: 15, km: 1 }).months).toEqual([]);
+  });
+
+  it("uses the interval as first occurrence when no first is given", () => {
+    const m = { monthFirst: null, monthEvery: 18, kmFirst: null, kmEvery: null };
+    expect(manualHits(m, { year: 2, km: null }).months).toEqual([18]);
+  });
+
+  it("returns null for a part that is unused or lacks age or km", () => {
+    expect(manualHits(manual, { year: null, km: null })).toEqual({ months: null, km: null });
+    const empty = { monthFirst: null, monthEvery: null, kmFirst: null, kmEvery: null };
+    expect(manualHits(empty, { year: 10, km: 40_000 })).toEqual({ months: null, km: null });
+  });
+
+  it("numbers the occurrence", () => {
+    expect(occurrenceFrom(120, 60, 120)).toBe(1);
+    expect(occurrenceFrom(120, 60, 180)).toBe(2);
+    expect(occurrenceFrom(35_000, 120_000, 155_000)).toBe(2);
+    expect(occurrenceFrom(120, null, 120)).toBe(1);
   });
 });

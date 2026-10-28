@@ -102,3 +102,63 @@ export function occurrenceNumber(rule: Rule, hit: number): number {
     ? Math.round(hit / rule.every)
     : Math.round((hit - (rule.first ?? rule.every)) / rule.every) + 1;
 }
+
+// Tillfällena first, first + every, … som ligger i fönstret [lo, hi]. Utan `every` finns
+// bara tillfället `first`. Månadsfönster är öppna nedåt (lo räknas inte), km-fönster slutna.
+function occurrences(
+  first: number,
+  every: number | null,
+  lo: number,
+  hi: number,
+  loInclusive: boolean,
+): number[] {
+  const inside = (k: number) => k <= hi && (loInclusive ? k >= lo : k > lo) && k > 0;
+  if (every === null) return inside(first) ? [first] : [];
+  const hits: number[] = [];
+  let j = Math.max(0, Math.ceil((lo - first) / every));
+  for (let k = first + j * every; k <= hi && hits.length < 1000; k = first + ++j * every) {
+    if (inside(k)) hits.push(k);
+  }
+  return hits;
+}
+
+// Ett eget intervall med en månadsdel och/eller en kilometerdel, t.ex. "120 mån och
+// därefter varje 60 mån" och "35 000 km och därefter varje 120 000 km".
+export type Manual = {
+  monthFirst: number | null;
+  monthEvery: number | null;
+  kmFirst: number | null;
+  kmEvery: number | null;
+};
+
+// Tillfällena per del, eller null för en del som inte används eller inte går att räkna
+// ännu (åldern eller mätarställningen saknas).
+export function manualHits(
+  m: Manual,
+  ctx: { year: number | null; km: number | null },
+): { months: number[] | null; km: number[] | null } {
+  const every = (n: number | null) => (n !== null && n > 0 ? n : null);
+  const monthFirst = m.monthFirst ?? every(m.monthEvery);
+  const kmFirst = m.kmFirst ?? every(m.kmEvery);
+  return {
+    months:
+      monthFirst === null || ctx.year === null
+        ? null
+        : occurrences(monthFirst, every(m.monthEvery), (ctx.year - 1) * 12, ctx.year * 12, false),
+    km:
+      kmFirst === null || ctx.km === null
+        ? null
+        : occurrences(
+            kmFirst,
+            every(m.kmEvery),
+            Math.max(0, ctx.km - KM_STEP),
+            ctx.km + KM_STEP,
+            true,
+          ),
+  };
+}
+
+// Hur många gången intervallet då har genomförts, räknat med tillfället `hit`.
+export function occurrenceFrom(first: number, every: number | null, hit: number): number {
+  return every === null ? 1 : Math.round((hit - first) / every) + 1;
+}
