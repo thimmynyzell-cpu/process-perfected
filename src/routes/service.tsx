@@ -154,6 +154,7 @@ function ServicePage() {
   const [km, setKm] = useState("");
   const [custom, setCustom] = useState<Record<string, RuleText>>({});
   const [open, setOpen] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   // Månader och år hänger ihop: ändrar man det ena uppdateras det andra.
   function changeMonths(text: string) {
@@ -178,82 +179,93 @@ function ServicePage() {
 
   function renderRows(rows: Row[]): ReactNode {
     return (
-      <ul className="mt-3 space-y-2">
-        {rows.map((row) => {
-          const text = custom[row.key] ?? toText(row.base);
-          const changed = JSON.stringify(text) !== JSON.stringify(toText(row.base));
-          const rule = toRule(text) ?? row.base;
-          const hits = ruleHits(rule, ctx);
-          const on = hits !== null && hits.length > 0;
-          const isOpen = open === row.key;
-          const showHits = hits !== null && hits.length > 0;
-          return (
-            <li key={row.key}>
-              <div
-                className={
-                  on
-                    ? "flex flex-wrap items-center gap-x-2 font-medium"
-                    : "flex flex-wrap items-center gap-x-2 text-muted-foreground"
-                }
-              >
-                <span
+      <>
+        <ul className="mt-3 space-y-2">
+          {rows.map((row) => {
+            const text = custom[row.key] ?? toText(row.base);
+            const changed = JSON.stringify(text) !== JSON.stringify(toText(row.base));
+            const rule = toRule(text) ?? row.base;
+            const hits = ruleHits(rule, ctx);
+            const on = hits !== null && hits.length > 0;
+            const isOpen = open === row.key;
+            const showHits = hits !== null && hits.length > 0;
+            // Rader som inte träffar döljs, utom när de är öppna eller har ett eget intervall.
+            if (!on && !showAll && !isOpen && !changed) return null;
+            return (
+              <li key={row.key}>
+                <div
                   className={
                     on
-                      ? "flex size-5 shrink-0 items-center justify-center rounded bg-primary text-xs text-primary-foreground"
-                      : "size-5 shrink-0 rounded border"
+                      ? "flex flex-wrap items-center gap-x-2 font-medium"
+                      : "flex flex-wrap items-center gap-x-2 text-muted-foreground"
                   }
                 >
-                  {on ? "✓" : ""}
-                </span>
-                <button
-                  type="button"
-                  aria-expanded={isOpen}
-                  onClick={() => setOpen(isOpen ? null : row.key)}
-                  className="whitespace-nowrap text-left underline decoration-dotted underline-offset-4"
-                >
-                  {row.label}
-                </button>
-                {changed && toRule(text) !== null && (
-                  <span className="text-sm font-normal text-muted-foreground">
-                    eget: {describe(rule)}
+                  <span
+                    className={
+                      on
+                        ? "flex size-5 shrink-0 items-center justify-center rounded bg-primary text-xs text-primary-foreground"
+                        : "size-5 shrink-0 rounded border"
+                    }
+                  >
+                    {on ? "✓" : ""}
                   </span>
+                  <button
+                    type="button"
+                    aria-expanded={isOpen}
+                    onClick={() => setOpen(isOpen ? null : row.key)}
+                    className="whitespace-nowrap text-left underline decoration-dotted underline-offset-4"
+                  >
+                    {row.label}
+                  </button>
+                  {changed && toRule(text) !== null && (
+                    <span className="text-sm font-normal text-muted-foreground">
+                      eget: {describe(rule)}
+                    </span>
+                  )}
+                  {showHits && (
+                    <span className="text-sm font-normal text-muted-foreground">
+                      (
+                      {hits
+                        .slice(0, 5)
+                        .map((h) =>
+                          rule.unit === "km"
+                            ? `${fmt(h)} · ${ordinal(occurrenceNumber(rule, h))}`
+                            : ordinal(occurrenceNumber(rule, h)),
+                        )
+                        .join(", ")}
+                      {hits.length > 5 ? ` … +${hits.length - 5}` : ""})
+                    </span>
+                  )}
+                  {hits === null && (
+                    <span className="text-sm font-normal text-muted-foreground">
+                      (ange {rule.unit === "km" ? "km" : "ålder"})
+                    </span>
+                  )}
+                </div>
+                {isOpen && (
+                  <RuleEditor
+                    text={text}
+                    base={toText(row.base)}
+                    changed={changed}
+                    onChange={(t) => setCustom({ ...custom, [row.key]: t })}
+                    onReset={() => {
+                      const { [row.key]: _removed, ...rest } = custom;
+                      setCustom(rest);
+                    }}
+                  />
                 )}
-                {showHits && (
-                  <span className="text-sm font-normal text-muted-foreground">
-                    (
-                    {hits
-                      .slice(0, 5)
-                      .map((h) =>
-                        rule.unit === "km"
-                          ? `${fmt(h)} · ${ordinal(occurrenceNumber(rule, h))}`
-                          : ordinal(occurrenceNumber(rule, h)),
-                      )
-                      .join(", ")}
-                    {hits.length > 5 ? ` … +${hits.length - 5}` : ""})
-                  </span>
-                )}
-                {hits === null && (
-                  <span className="text-sm font-normal text-muted-foreground">
-                    (ange {rule.unit === "km" ? "km" : "ålder"})
-                  </span>
-                )}
-              </div>
-              {isOpen && (
-                <RuleEditor
-                  text={text}
-                  base={toText(row.base)}
-                  changed={changed}
-                  onChange={(t) => setCustom({ ...custom, [row.key]: t })}
-                  onReset={() => {
-                    const { [row.key]: _removed, ...rest } = custom;
-                    setCustom(rest);
-                  }}
-                />
-              )}
-            </li>
-          );
-        })}
-      </ul>
+              </li>
+            );
+          })}
+        </ul>
+        <button
+          type="button"
+          onClick={() => setShowAll(!showAll)}
+          className="mt-3 text-sm underline"
+        >
+          {showAll ? "Dölj intervall som inte träffar" : "Visa alla intervall"}
+        </button>
+      </>
     );
   }
 
