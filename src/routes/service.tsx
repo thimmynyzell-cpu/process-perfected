@@ -6,11 +6,15 @@ import { Label } from "@/components/ui/label";
 import {
   EXTRA_SERVICES,
   KM_INTERVALS,
+  ageRule,
   isHalfYear,
-  kmHits,
+  kmRule,
+  occurrenceNumber,
+  ordinal,
   monthsToYear,
-  servicesForYear,
+  ruleHits,
   yearChoices,
+  type Rule,
 } from "@/lib/serviceSchedule";
 
 export const Route = createFileRoute("/service")({
@@ -26,36 +30,120 @@ export const Route = createFileRoute("/service")({
   component: ServicePage,
 });
 
+const fmt = (n: number) => n.toLocaleString("sv-SE");
+
 function parse(text: string): number | null {
   const n = Number(text.replace(/\s/g, "").replace(",", "."));
   return text.trim() !== "" && Number.isFinite(n) && n >= 0 ? n : null;
 }
 
-function CheckList({ rows }: { rows: { key: string; label: ReactNode; on: boolean }[] }) {
+// Regeln som text, så att fälten går att skriva i.
+type RuleText = { first: string; every: string; unit: "months" | "km" };
+
+function toText(rule: Rule): RuleText {
+  return {
+    first: rule.first === null ? "" : String(rule.first),
+    every: String(rule.every),
+    unit: rule.unit,
+  };
+}
+
+// Ogiltigt intervall ger null; då gäller den vanliga regeln tills det rättas.
+function toRule(t: RuleText): Rule | null {
+  const every = parse(t.every);
+  if (every === null || every <= 0) return null;
+  const first = parse(t.first);
+  return {
+    first: t.unit === "months" && first !== null && first > 0 ? first : null,
+    every,
+    unit: t.unit,
+  };
+}
+
+function describe(rule: Rule): string {
+  return rule.unit === "km"
+    ? `var ${fmt(rule.every)} km`
+    : `${rule.first ?? rule.every} mån, sedan var ${rule.every} mån`;
+}
+
+type Row = {
+  key: string;
+  label: string;
+  base: Rule;
+};
+
+const AGE_ROWS: Row[] = EXTRA_SERVICES.map((s) => ({
+  key: `age:${s.label}`,
+  label: s.label,
+  base: ageRule(s),
+}));
+
+const KM_ROWS: Row[] = KM_INTERVALS.map((n) => ({
+  key: `km:${n}`,
+  label: `Var ${fmt(n)} km`,
+  base: kmRule(n),
+}));
+
+function RuleEditor({
+  text,
+  base,
+  onChange,
+  onReset,
+  changed,
+}: {
+  text: RuleText;
+  base: RuleText;
+  onChange: (t: RuleText) => void;
+  onReset: () => void;
+  changed: boolean;
+}) {
   return (
-    <ul className="mt-3 space-y-2">
-      {rows.map((r) => (
-        <li
-          key={r.key}
-          className={
-            r.on
-              ? "flex items-center gap-2 font-medium"
-              : "flex items-center gap-2 text-muted-foreground"
-          }
-        >
-          <span
+    <div className="mt-2 space-y-3 rounded-md border bg-muted/40 p-3">
+      <div className="flex gap-2">
+        {(["months", "km"] as const).map((u) => (
+          <button
+            key={u}
+            type="button"
+            aria-pressed={text.unit === u}
+            onClick={() => onChange(u === base.unit ? base : { first: "", every: "", unit: u })}
             className={
-              r.on
-                ? "flex size-5 shrink-0 items-center justify-center rounded bg-primary text-xs text-primary-foreground"
-                : "size-5 shrink-0 rounded border"
+              text.unit === u
+                ? "rounded-md border border-primary bg-primary px-3 py-1 text-sm font-medium text-primary-foreground"
+                : "rounded-md border px-3 py-1 text-sm font-medium hover:bg-accent"
             }
           >
-            {r.on ? "✓" : ""}
-          </span>
-          <span>{r.label}</span>
-        </li>
-      ))}
-    </ul>
+            {u === "months" ? "Månader" : "Kilometer"}
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {text.unit === "months" && (
+          <div className="space-y-1">
+            <Label className="text-xs">Första gången (mån)</Label>
+            <Input
+              inputMode="numeric"
+              value={text.first}
+              onChange={(e) => onChange({ ...text, first: e.target.value })}
+            />
+          </div>
+        )}
+        <div className="space-y-1">
+          <Label className="text-xs">
+            Därefter varje ({text.unit === "months" ? "mån" : "km"})
+          </Label>
+          <Input
+            inputMode="numeric"
+            value={text.every}
+            onChange={(e) => onChange({ ...text, every: e.target.value })}
+          />
+        </div>
+      </div>
+      {changed && (
+        <button type="button" onClick={onReset} className="text-sm underline">
+          Återställ
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -64,6 +152,8 @@ function ServicePage() {
   const [yearText, setYearText] = useState("");
   const [pick, setPick] = useState<number | null>(null);
   const [km, setKm] = useState("");
+  const [custom, setCustom] = useState<Record<string, RuleText>>({});
+  const [open, setOpen] = useState<string | null>(null);
 
   // Månader och år hänger ihop: ändrar man det ena uppdateras det andra.
   function changeMonths(text: string) {
@@ -83,10 +173,95 @@ function ServicePage() {
   const choices = value === null ? [] : yearChoices(value);
   const year =
     value === null ? null : pick !== null && choices.includes(pick) ? pick : monthsToYear(value);
-  const due = year === null ? [] : servicesForYear(year);
-
   const kmValue = parse(km);
-  const kmDue = kmValue === null ? [] : KM_INTERVALS.filter((n) => kmHits(kmValue, n).length > 0);
+  const ctx = { year, km: kmValue };
+
+  function renderRows(rows: Row[]): ReactNode {
+    return (
+      <ul className="mt-3 space-y-2">
+        {rows.map((row) => {
+          const text = custom[row.key] ?? toText(row.base);
+          const changed = JSON.stringify(text) !== JSON.stringify(toText(row.base));
+          const rule = toRule(text) ?? row.base;
+          const hits = ruleHits(rule, ctx);
+          const on = hits !== null && hits.length > 0;
+          const isOpen = open === row.key;
+          const showHits = hits !== null && hits.length > 0;
+          return (
+            <li key={row.key}>
+              <div
+                className={
+                  on
+                    ? "flex flex-wrap items-center gap-x-2 font-medium"
+                    : "flex flex-wrap items-center gap-x-2 text-muted-foreground"
+                }
+              >
+                <span
+                  className={
+                    on
+                      ? "flex size-5 shrink-0 items-center justify-center rounded bg-primary text-xs text-primary-foreground"
+                      : "size-5 shrink-0 rounded border"
+                  }
+                >
+                  {on ? "✓" : ""}
+                </span>
+                <button
+                  type="button"
+                  aria-expanded={isOpen}
+                  onClick={() => setOpen(isOpen ? null : row.key)}
+                  className="whitespace-nowrap text-left underline decoration-dotted underline-offset-4"
+                >
+                  {row.label}
+                </button>
+                {changed && toRule(text) !== null && (
+                  <span className="text-sm font-normal text-muted-foreground">
+                    eget: {describe(rule)}
+                  </span>
+                )}
+                {showHits && (
+                  <span className="text-sm font-normal text-muted-foreground">
+                    (
+                    {hits
+                      .slice(0, 5)
+                      .map((h) =>
+                        rule.unit === "km"
+                          ? `${fmt(h)} · ${ordinal(occurrenceNumber(rule, h))}`
+                          : ordinal(occurrenceNumber(rule, h)),
+                      )
+                      .join(", ")}
+                    {hits.length > 5 ? ` … +${hits.length - 5}` : ""})
+                  </span>
+                )}
+                {hits === null && (
+                  <span className="text-sm font-normal text-muted-foreground">
+                    (ange {rule.unit === "km" ? "km" : "ålder"})
+                  </span>
+                )}
+              </div>
+              {isOpen && (
+                <RuleEditor
+                  text={text}
+                  base={toText(row.base)}
+                  changed={changed}
+                  onChange={(t) => setCustom({ ...custom, [row.key]: t })}
+                  onReset={() => {
+                    const { [row.key]: _removed, ...rest } = custom;
+                    setCustom(rest);
+                  }}
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  const anyOn = (rows: Row[]) =>
+    rows.some((r) => {
+      const hits = ruleHits(toRule(custom[r.key] ?? toText(r.base)) ?? r.base, ctx);
+      return hits !== null && hits.length > 0;
+    });
 
   return (
     <div className="min-h-screen bg-background">
@@ -95,7 +270,8 @@ function ServicePage() {
           <Wrench className="size-5" /> Serviceschema
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Skriv in ålder och mätarställning så visas tilläggsservicarna.
+          Skriv in ålder och mätarställning så visas tilläggsservicarna. Klicka på en rad för att
+          skriva in ett eget intervall i månader eller km.
         </p>
 
         <div className="mt-6 grid gap-6 sm:grid-cols-2">
@@ -163,16 +339,10 @@ function ServicePage() {
                   Tilläggsservicar för{" "}
                   <span className="font-semibold text-foreground">år {year}</span>
                 </p>
-                {due.length === 0 && (
+                {!anyOn(AGE_ROWS) && (
                   <p className="mt-2 font-medium">Inga tilläggsservicar detta år.</p>
                 )}
-                <CheckList
-                  rows={EXTRA_SERVICES.map((s) => ({
-                    key: s.label,
-                    label: s.label,
-                    on: due.includes(s),
-                  }))}
-                />
+                {renderRows(AGE_ROWS)}
               </div>
             )}
           </section>
@@ -193,35 +363,13 @@ function ServicePage() {
             {kmValue !== null && (
               <div className="rounded-lg border p-4">
                 <p className="text-sm text-muted-foreground">
-                  Intervall mellan {Math.max(0, kmValue - 10_000).toLocaleString("sv-SE")} och{" "}
-                  {(kmValue + 10_000).toLocaleString("sv-SE")} km
+                  Intervall mellan {fmt(Math.max(0, kmValue - 10_000))} och {fmt(kmValue + 10_000)}{" "}
+                  km
                 </p>
-                {kmDue.length === 0 && (
+                {!anyOn(KM_ROWS) && (
                   <p className="mt-2 font-medium">Inga körsträcksintervall träffar.</p>
                 )}
-                <CheckList
-                  rows={KM_INTERVALS.map((n) => {
-                    const on = kmDue.includes(n);
-                    return {
-                      key: String(n),
-                      on,
-                      label: (
-                        <>
-                          Var {n.toLocaleString("sv-SE")} km
-                          {on && (
-                            <span className="ml-1 text-sm font-normal text-muted-foreground">
-                              (
-                              {kmHits(kmValue, n)
-                                .map((m) => m.toLocaleString("sv-SE"))
-                                .join(", ")}
-                              )
-                            </span>
-                          )}
-                        </>
-                      ),
-                    };
-                  })}
-                />
+                {renderRows(KM_ROWS)}
               </div>
             )}
           </section>

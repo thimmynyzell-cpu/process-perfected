@@ -1,4 +1,10 @@
 import {
+  ageRule,
+  occurrenceNumber,
+  ordinal,
+  EXTRA_SERVICES,
+  kmRule,
+  ruleHits,
   isHalfYear,
   yearChoices,
   kmHits,
@@ -52,7 +58,7 @@ describe("kmHits", () => {
 
   it("takes everything that falls between km-10 000 and km+10 000", () => {
     expect(hitting(90_000)).toEqual([
-      10_000, 20_000, 30_000, 40_000, 50_000, 80_000, 90_000, 100_000,
+      10_000, 15_000, 20_000, 30_000, 40_000, 45_000, 50_000, 80_000, 90_000, 100_000,
     ]);
     expect(kmHits(90_000, 20_000)).toEqual([80_000, 100_000]);
     expect(kmHits(90_000, 60_000)).toEqual([]);
@@ -60,5 +66,73 @@ describe("kmHits", () => {
   it("never counts km 0", () => {
     expect(hitting(0)).toEqual([10_000]);
     expect(kmHits(5_000, 10_000)).toEqual([10_000]);
+  });
+});
+
+describe("ruleHits", () => {
+  const none = { year: null, km: null };
+
+  it("gives the same answer as the printed sheet for the standard age rules", () => {
+    for (let year = 1; year <= 32; year++) {
+      const fromRules = EXTRA_SERVICES.filter(
+        (s) => ruleHits(ageRule(s), { year, km: null })!.length > 0,
+      );
+      expect(fromRules).toEqual(servicesForYear(year));
+    }
+  });
+
+  it("counts a custom month interval in the year it falls", () => {
+    const rule = { first: 36, every: 18, unit: "months" as const };
+    expect(ruleHits(rule, { year: 3, km: null })).toEqual([36]);
+    expect(ruleHits(rule, { year: 4, km: null })).toEqual([]);
+    expect(ruleHits(rule, { year: 5, km: null })).toEqual([54]);
+  });
+
+  it("uses the interval as first occurrence when no first is given", () => {
+    expect(ruleHits({ first: null, every: 18, unit: "months" }, { year: 2, km: null })).toEqual([
+      18,
+    ]);
+  });
+
+  it("counts a custom km interval within ±10 000 km", () => {
+    const rule = { first: null, every: 25_000, unit: "km" as const };
+    expect(ruleHits(rule, { year: null, km: 70_000 })).toEqual([75_000]);
+    expect(ruleHits(rule, { year: null, km: 52_000 })).toEqual([50_000]);
+    expect(ruleHits(kmRule(45_000), { year: null, km: 90_000 })).toEqual([90_000]);
+  });
+
+  it("returns null while the age or km it needs is missing", () => {
+    expect(ruleHits(ageRule(EXTRA_SERVICES[0]!), none)).toBeNull();
+    expect(ruleHits(kmRule(10_000), none)).toBeNull();
+  });
+});
+
+describe("occurrenceNumber", () => {
+  it("counts how many times the interval has been done", () => {
+    // 10 år, var 24:e månad: 120 månader är 5:e gången
+    const rule = ageRule(EXTRA_SERVICES[0]!);
+    const hit = ruleHits(rule, { year: 10, km: null })![0]!;
+    expect(occurrenceNumber(rule, hit)).toBe(5);
+    expect(occurrenceNumber(ageRule(EXTRA_SERVICES[1]!), 36)).toBe(1);
+    expect(occurrenceNumber({ first: 36, every: 18, unit: "months" }, 54)).toBe(2);
+    expect(occurrenceNumber(kmRule(30_000), 90_000)).toBe(3);
+    expect(occurrenceNumber(kmRule(10_000), 80_000)).toBe(8);
+  });
+});
+
+describe("ordinal", () => {
+  it("writes Swedish ordinals", () => {
+    expect([1, 2, 3, 4, 5, 11, 12, 21, 22, 23].map(ordinal)).toEqual([
+      "1:a",
+      "2:a",
+      "3:e",
+      "4:e",
+      "5:e",
+      "11:e",
+      "12:e",
+      "21:a",
+      "22:a",
+      "23:e",
+    ]);
   });
 });
