@@ -1,4 +1,4 @@
-import { kmHits, KM_INTERVALS, monthsToYear, servicesForYear } from "./serviceSchedule";
+import { isHalfYear, kmHits, KM_INTERVALS, monthsToYear, servicesForYear } from "./serviceSchedule";
 
 const labels = (year: number) => servicesForYear(year).map((s) => s.label);
 
@@ -8,6 +8,15 @@ describe("monthsToYear", () => {
     expect(monthsToYear(41)).toBe(3);
     expect(monthsToYear(42)).toBe(4);
     expect(monthsToYear(3)).toBe(0);
+  });
+});
+
+describe("isHalfYear", () => {
+  it("is true only exactly midway between two years", () => {
+    expect(isHalfYear(42)).toBe(true);
+    expect(isHalfYear(6)).toBe(true);
+    expect(isHalfYear(41)).toBe(false);
+    expect(isHalfYear(48)).toBe(false);
   });
 });
 

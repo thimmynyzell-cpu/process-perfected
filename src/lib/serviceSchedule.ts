@@ -16,6 +16,11 @@ export function monthsToYear(months: number): number {
   return Math.max(0, Math.round(months / 12));
 }
 
+// Exakt mitt emellan två år (6 månader över ett helt år), t.ex. 42 månader.
+export function isHalfYear(months: number): boolean {
+  return months >= 0 && months % 12 === 6;
+}
+
 export function servicesForYear(year: number): ExtraService[] {
   return EXTRA_SERVICES.filter(
     (s) => year >= s.firstYear && (year - s.firstYear) % s.everyYears === 0,

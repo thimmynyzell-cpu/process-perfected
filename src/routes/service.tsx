@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import {
   EXTRA_SERVICES,
   KM_INTERVALS,
+  isHalfYear,
   kmHits,
   monthsToYear,
   servicesForYear,
@@ -26,11 +27,27 @@ export const Route = createFileRoute("/service")({
 
 function ServicePage() {
   const [months, setMonths] = useState("");
+  const [yearText, setYearText] = useState("");
   const [km, setKm] = useState("");
   const value = Number(months.replace(",", "."));
   const valid = months.trim() !== "" && Number.isFinite(value) && value >= 0;
   const year = valid ? monthsToYear(value) : null;
   const due = year === null ? [] : servicesForYear(year);
+  const half = valid && isHalfYear(value);
+  const lowerYear = half ? year! - 1 : null;
+  const lowerDue = lowerYear === null ? [] : servicesForYear(lowerYear);
+
+  // Månader och år hänger ihop: ändrar man det ena uppdateras det andra.
+  function changeMonths(text: string) {
+    setMonths(text);
+    const m = Number(text.replace(",", "."));
+    setYearText(text.trim() !== "" && Number.isFinite(m) && m >= 0 ? String(monthsToYear(m)) : "");
+  }
+  function changeYear(text: string) {
+    setYearText(text);
+    const y = Number(text.replace(",", "."));
+    setMonths(text.trim() !== "" && Number.isFinite(y) && y >= 0 ? String(Math.round(y * 12)) : "");
+  }
   const kmValue = Number(km.replace(/\s/g, "").replace(",", "."));
   const kmValid = km.trim() !== "" && Number.isFinite(kmValue) && kmValue >= 0;
   const kmDue = kmValid ? KM_INTERVALS.filter((n) => kmHits(kmValue, n).length > 0) : [];
@@ -53,7 +70,18 @@ function ServicePage() {
             autoFocus
             placeholder="t.ex. 144"
             value={months}
-            onChange={(e) => setMonths(e.target.value)}
+            onChange={(e) => changeMonths(e.target.value)}
+          />
+        </div>
+
+        <div className="mt-6 space-y-2">
+          <Label htmlFor="year">eller år</Label>
+          <Input
+            id="year"
+            inputMode="decimal"
+            placeholder="t.ex. 12"
+            value={yearText}
+            onChange={(e) => changeYear(e.target.value)}
           />
         </div>
 
@@ -122,6 +150,16 @@ function ServicePage() {
               {value} månader ≈ <span className="font-semibold text-foreground">år {year}</span> (
               {year * 12} månader)
             </p>
+            {half && (
+              <p className="mt-3 rounded-md border border-amber-500 bg-amber-500/10 p-3 text-sm font-medium">
+                Mitt emellan år {lowerYear} och år {year}. Avrundat uppåt till år {year}. Året under
+                (år {lowerYear}):{" "}
+                {lowerDue.length === 0
+                  ? "inga tilläggsservicar"
+                  : lowerDue.map((s) => s.label).join(" · ")}
+                .
+              </p>
+            )}
             {due.length === 0 ? (
               <p className="mt-3 font-medium">Inga tilläggsservicar detta år.</p>
             ) : (
