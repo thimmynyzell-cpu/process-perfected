@@ -68,9 +68,6 @@ type ManualText = {
   monthEvery: string;
   kmFirst: string;
   kmEvery: string;
-  // Mätarställning för just det här intervallet. Tomt = värdet ovan. Åldern utgår alltid från
-  // fältet överst.
-  vKm: string;
 };
 
 const blankManual = (id: number): ManualText => ({
@@ -79,7 +76,6 @@ const blankManual = (id: number): ManualText => ({
   monthEvery: "",
   kmFirst: "",
   kmEvery: "",
-  vKm: "",
 });
 
 function Tick({ on }: { on: boolean }) {
@@ -182,7 +178,7 @@ function ServicePage() {
     if (!usesMonths && !usesKm) return null;
 
     const mYear = year;
-    const mKm = parse(m.vKm) ?? kmValue;
+    const mKm = kmValue;
     const mctx = { year: mYear, km: mKm };
 
     const hits = manualHits({ monthFirst, monthEvery, kmFirst, kmEvery }, mctx);
