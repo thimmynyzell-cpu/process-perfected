@@ -1,5 +1,6 @@
 import {
   ageRule,
+  surroundingOccurrences,
   normalizeInterval,
   manualBasis,
   timesDone,
@@ -230,5 +231,16 @@ describe("manualBasis", () => {
   it("needs both parts and both age and km", () => {
     expect(manualBasis(manual, { year: 3, km: null })).toBeNull();
     expect(manualBasis({ ...manual, kmFirst: null, kmEvery: null }, { year: 3, km: 1 })).toBeNull();
+  });
+});
+
+describe("surroundingOccurrences", () => {
+  it("gives the previous and next occurrence around a value", () => {
+    expect(surroundingOccurrences(120, 60, 100)).toEqual({ prev: null, next: 120 });
+    expect(surroundingOccurrences(120, 60, 130)).toEqual({ prev: 120, next: 180 });
+    expect(surroundingOccurrences(35_000, 120_000, 100_000)).toEqual({
+      prev: 35_000,
+      next: 155_000,
+    });
   });
 });

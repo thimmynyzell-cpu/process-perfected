@@ -191,3 +191,15 @@ export function manualBasis(
   const km = timesDone(k.first, k.every, ctx.km);
   return { months, km, choice: months === km ? "equal" : months > km ? "months" : "km" };
 }
+
+// Senaste tillfället som har passerat (<= at) och nästa som kommer (> at), eller null
+// åt det håll där det inte finns något (före första gången respektive aldrig för prev).
+export function surroundingOccurrences(
+  first: number,
+  every: number,
+  at: number,
+): { prev: number | null; next: number } {
+  if (at < first) return { prev: null, next: first };
+  const prev = first + Math.floor((at - first) / every) * every;
+  return { prev, next: prev + every };
+}

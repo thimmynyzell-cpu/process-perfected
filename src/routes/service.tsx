@@ -18,6 +18,7 @@ import {
   occurrenceNumber,
   ordinal,
   ruleHits,
+  surroundingOccurrences,
   timesDone,
   yearChoices,
   type Rule,
@@ -169,6 +170,15 @@ function ServicePage() {
     );
   }
 
+  // När intervallet inte träffar: hur långt det är till nästa tillfälle och sedan senaste.
+  function distance(first: number, every: number, at: number, unit: "mån" | "km") {
+    const { prev, next } = surroundingOccurrences(first, every, at);
+    const f = (n: number) => (unit === "km" ? fmt(n) : String(n));
+    return ` Nästa: ${f(next)} ${unit} (om ${f(next - at)} ${unit}).${
+      prev === null ? "" : ` Senaste: ${f(prev)} ${unit} (för ${f(at - prev)} ${unit} sedan).`
+    }`;
+  }
+
   function manualResult(m: ManualText) {
     const monthFirst = parse(m.monthFirst);
     const monthEvery = parse(m.monthEvery);
@@ -192,7 +202,7 @@ function ServicePage() {
           ? "Ange ålder för att räkna på månader."
           : `${
               hits.months.length === 0
-                ? `Träffar inte år ${mYear} (${mYear! * 12}).`
+                ? `Träffar inte år ${mYear} (${mYear! * 12}).${distance(first, every, mYear! * 12, "mån")}`
                 : `Träffar år ${mYear} (${mYear! * 12}): ${hits.months
                     .slice(0, 5)
                     .map((h) => `${h} mån · ${ordinal(occurrenceFrom(first, every, h))}`)
@@ -207,7 +217,7 @@ function ServicePage() {
           ? "Ange mätarställning för att räkna på kilometer."
           : `${
               hits.km.length === 0
-                ? "Träffar inte mätarställningen."
+                ? `Träffar inte mätarställningen.${distance(first, every, mKm!, "km")}`
                 : `Träffar mätarställningen: ${hits.km
                     .slice(0, 5)
                     .map((h) => `${fmt(h)} km · ${ordinal(occurrenceFrom(first, every, h))}`)
