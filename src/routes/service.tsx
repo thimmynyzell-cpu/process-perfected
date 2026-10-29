@@ -68,8 +68,8 @@ type ManualText = {
   monthEvery: string;
   kmFirst: string;
   kmEvery: string;
-  // Bilens ålder och mätarställning för just det här intervallet. Tomt = värdena ovan.
-  vAge: string;
+  // Mätarställning för just det här intervallet. Tomt = värdet ovan. Åldern utgår alltid från
+  // fältet överst.
   vKm: string;
 };
 
@@ -79,7 +79,6 @@ const blankManual = (id: number): ManualText => ({
   monthEvery: "",
   kmFirst: "",
   kmEvery: "",
-  vAge: "",
   vKm: "",
 });
 
@@ -174,9 +173,7 @@ function ServicePage() {
     const usesKm = kmFirst !== null || kmEvery !== null;
     if (!usesMonths && !usesKm) return null;
 
-    // Egna värden för bilen i rutan går före de överst.
-    const ownMonths = parse(m.vAge);
-    const mYear = ownMonths === null ? year : monthsToYear(ownMonths);
+    const mYear = year;
     const mKm = parse(m.vKm) ?? kmValue;
     const mctx = { year: mYear, km: mKm };
 
@@ -344,41 +341,26 @@ function ServicePage() {
               <div key={m.id} className="rounded-lg border p-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-medium">Eget intervall {i + 1}</h3>
-                  {manuals.length > 1 && (
+                  <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      aria-label={`Ta bort eget intervall ${i + 1}`}
-                      onClick={() => setManuals(manuals.filter((x) => x.id !== m.id))}
-                      className="rounded p-1 text-muted-foreground hover:bg-accent"
+                      onClick={() =>
+                        setManuals(manuals.map((x) => (x.id === m.id ? blankManual(m.id) : x)))
+                      }
+                      className="rounded px-2 py-1 text-sm text-muted-foreground hover:bg-accent"
                     >
-                      <X className="size-4" />
+                      Rensa
                     </button>
-                  )}
-                </div>
-                <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <Label htmlFor={`va${m.id}`} className="text-xs">
-                      Bilens ålder (mån)
-                    </Label>
-                    <Input
-                      id={`va${m.id}`}
-                      inputMode="numeric"
-                      placeholder={months.trim() !== "" ? months : "som ovan"}
-                      value={m.vAge}
-                      onChange={(e) => changeManual(m.id, "vAge", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor={`vk${m.id}`} className="text-xs">
-                      Mätarställning (km)
-                    </Label>
-                    <Input
-                      id={`vk${m.id}`}
-                      inputMode="numeric"
-                      placeholder={km.trim() !== "" ? km : "som ovan"}
-                      value={m.vKm}
-                      onChange={(e) => changeManual(m.id, "vKm", e.target.value)}
-                    />
+                    {manuals.length > 1 && (
+                      <button
+                        type="button"
+                        aria-label={`Ta bort eget intervall ${i + 1}`}
+                        onClick={() => setManuals(manuals.filter((x) => x.id !== m.id))}
+                        className="rounded p-1 text-muted-foreground hover:bg-accent"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
