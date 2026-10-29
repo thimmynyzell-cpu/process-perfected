@@ -178,7 +178,7 @@ export function timesDone(first: number, every: number | null, upTo: number): nu
 
 // För ett eget intervall med både månader och km: vilket av dem som har genomförts flest
 // gånger, och alltså ska gälla. Åldern räknas till slutet av valt år och mätarställningen
-// till km + 10 000, i linje med träffarna. Null om någon del saknas eller inte går att
+// till den faktiska mätarställningen (utan ±10 000 km). Null om någon del saknas eller inte går att
 // räkna ännu.
 export function manualBasis(
   m: Manual,
@@ -188,6 +188,6 @@ export function manualBasis(
   const k = normalizeInterval(m.kmFirst, m.kmEvery);
   if (mo === null || k === null || ctx.year === null || ctx.km === null) return null;
   const months = timesDone(mo.first, mo.every, ctx.year * 12);
-  const km = timesDone(k.first, k.every, ctx.km + KM_STEP);
+  const km = timesDone(k.first, k.every, ctx.km);
   return { months, km, choice: months === km ? "equal" : months > km ? "months" : "km" };
 }

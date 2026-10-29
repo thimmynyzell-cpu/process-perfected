@@ -202,22 +202,28 @@ describe("manualBasis", () => {
   });
 
   it("picks the part that has been done most times", () => {
-    // 3 år = 3 gånger; 30 000 km (+10 000) = 2 gånger
+    // 3 år = 3 gånger; 30 000 km = 2 gånger
     expect(manualBasis(manual, { year: 3, km: 30_000 })).toEqual({
       months: 3,
       km: 2,
       choice: "months",
     });
-    // 3 år = 3 gånger; 80 000 km (+10 000) = 6 gånger
+    // 3 år = 3 gånger; 80 000 km = 5 gånger
     expect(manualBasis(manual, { year: 3, km: 80_000 })).toEqual({
       months: 3,
-      km: 6,
+      km: 5,
       choice: "km",
     });
-    expect(manualBasis(manual, { year: 2, km: 20_000 })).toEqual({
+    expect(manualBasis(manual, { year: 2, km: 30_000 })).toEqual({
       months: 2,
       km: 2,
       choice: "equal",
+    });
+    // 29 999 km har inte nått 30 000 km, så bara en gång
+    expect(manualBasis(manual, { year: 2, km: 29_999 })).toEqual({
+      months: 2,
+      km: 1,
+      choice: "months",
     });
   });
 

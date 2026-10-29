@@ -212,7 +212,7 @@ function ServicePage() {
                     .slice(0, 5)
                     .map((h) => `${fmt(h)} km · ${ordinal(occurrenceFrom(first, every, h))}`)
                     .join(", ")}.`
-            } ${times(timesDone(first, every, mKm! + 10_000))}`,
+            } ${times(timesDone(first, every, mKm!))}`,
       );
     }
     const on = (hits.months?.length ?? 0) > 0 || (hits.km?.length ?? 0) > 0;
