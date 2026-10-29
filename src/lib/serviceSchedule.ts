@@ -162,3 +162,26 @@ export function manualHits(
 export function occurrenceFrom(first: number, every: number | null, hit: number): number {
   return every === null ? 1 : Math.round((hit - first) / every) + 1;
 }
+
+// Hur många gånger ett intervall har genomförts fram till `upTo` (månader eller km).
+export function timesDone(first: number, every: number | null, upTo: number): number {
+  if (upTo < first) return 0;
+  return every === null ? 1 : Math.floor((upTo - first) / every) + 1;
+}
+
+// För ett eget intervall med både månader och km: vilket av dem som har genomförts flest
+// gånger, och alltså ska gälla. Åldern räknas till slutet av valt år och mätarställningen
+// till km + 10 000, i linje med träffarna. Null om någon del saknas eller inte går att
+// räkna ännu.
+export function manualBasis(
+  m: Manual,
+  ctx: { year: number | null; km: number | null },
+): { months: number; km: number; choice: "months" | "km" | "equal" } | null {
+  const every = (n: number | null) => (n !== null && n > 0 ? n : null);
+  const monthFirst = m.monthFirst ?? every(m.monthEvery);
+  const kmFirst = m.kmFirst ?? every(m.kmEvery);
+  if (monthFirst === null || kmFirst === null || ctx.year === null || ctx.km === null) return null;
+  const months = timesDone(monthFirst, every(m.monthEvery), ctx.year * 12);
+  const km = timesDone(kmFirst, every(m.kmEvery), ctx.km + KM_STEP);
+  return { months, km, choice: months === km ? "equal" : months > km ? "months" : "km" };
+}

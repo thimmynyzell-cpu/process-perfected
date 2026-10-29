@@ -1,5 +1,7 @@
 import {
   ageRule,
+  manualBasis,
+  timesDone,
   manualHits,
   occurrenceFrom,
   occurrenceNumber,
@@ -181,5 +183,41 @@ describe("manualHits", () => {
     expect(occurrenceFrom(120, 60, 180)).toBe(2);
     expect(occurrenceFrom(35_000, 120_000, 155_000)).toBe(2);
     expect(occurrenceFrom(120, null, 120)).toBe(1);
+  });
+});
+
+describe("manualBasis", () => {
+  const manual = { monthFirst: 12, monthEvery: 12, kmFirst: 15_000, kmEvery: 15_000 };
+
+  it("counts how many times each part has been done", () => {
+    expect(timesDone(120, 60, 119)).toBe(0);
+    expect(timesDone(120, 60, 120)).toBe(1);
+    expect(timesDone(120, 60, 180)).toBe(2);
+    expect(timesDone(120, null, 500)).toBe(1);
+  });
+
+  it("picks the part that has been done most times", () => {
+    // 3 år = 3 gånger; 30 000 km (+10 000) = 2 gånger
+    expect(manualBasis(manual, { year: 3, km: 30_000 })).toEqual({
+      months: 3,
+      km: 2,
+      choice: "months",
+    });
+    // 3 år = 3 gånger; 80 000 km (+10 000) = 6 gånger
+    expect(manualBasis(manual, { year: 3, km: 80_000 })).toEqual({
+      months: 3,
+      km: 6,
+      choice: "km",
+    });
+    expect(manualBasis(manual, { year: 2, km: 20_000 })).toEqual({
+      months: 2,
+      km: 2,
+      choice: "equal",
+    });
+  });
+
+  it("needs both parts and both age and km", () => {
+    expect(manualBasis(manual, { year: 3, km: null })).toBeNull();
+    expect(manualBasis({ ...manual, kmFirst: null, kmEvery: null }, { year: 3, km: 1 })).toBeNull();
   });
 });

@@ -10,6 +10,7 @@ import {
   ageRule,
   isHalfYear,
   kmRule,
+  manualBasis,
   manualHits,
   monthsToYear,
   occurrenceFrom,
@@ -193,7 +194,9 @@ function ServicePage() {
       );
     }
     const on = (hits.months?.length ?? 0) > 0 || (hits.km?.length ?? 0) > 0;
-    return { on, lines };
+    const basis =
+      usesMonths && usesKm ? manualBasis({ monthFirst, monthEvery, kmFirst, kmEvery }, ctx) : null;
+    return { on, lines, basis };
   }
 
   return (
@@ -399,6 +402,18 @@ function ServicePage() {
                       ))}
                     </div>
                   </div>
+                )}
+                {result?.basis && (
+                  <p className="mt-3 rounded-md border bg-muted/40 p-3 text-sm font-medium">
+                    Genomförd flest gånger:{" "}
+                    {result.basis.choice === "equal"
+                      ? `lika många (${result.basis.months} gånger på år och km). Välj själv.`
+                      : `${result.basis.choice === "months" ? "år" : "kilometer"} (${
+                          result.basis.choice === "months" ? result.basis.months : result.basis.km
+                        } mot ${
+                          result.basis.choice === "months" ? result.basis.km : result.basis.months
+                        } gånger). Gå på ${result.basis.choice === "months" ? "år" : "kilometer"}.`}
+                  </p>
                 )}
               </div>
             );
