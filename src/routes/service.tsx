@@ -236,17 +236,7 @@ function ServicePage() {
           Skriv in ålder och mätarställning så visas tilläggsservicarna som träffar.
         </p>
 
-        <Button
-          type="button"
-          variant="outline"
-          size="lg"
-          onClick={clearAll}
-          className="mt-6 w-full"
-        >
-          Rensa allt
-        </Button>
-
-        <div className="mt-4 grid gap-6 sm:grid-cols-2">
+        <div className="mt-6 grid gap-6 sm:grid-cols-2">
           <section className="space-y-4">
             <h2 className="font-semibold">Ålder</h2>
             <div className="grid grid-cols-2 gap-3">
@@ -272,7 +262,35 @@ function ServicePage() {
                 />
               </div>
             </div>
+          </section>
 
+          <section className="space-y-4">
+            <h2 className="font-semibold">Mätarställning</h2>
+            <div className="space-y-2">
+              <Label htmlFor="km">Kilometer</Label>
+              <Input
+                id="km"
+                inputMode="numeric"
+                placeholder="t.ex. 60000"
+                value={km}
+                onChange={(e) => setKm(e.target.value)}
+              />
+            </div>
+          </section>
+        </div>
+
+        <Button
+          type="button"
+          variant="destructive"
+          size="lg"
+          onClick={clearAll}
+          className="mt-6 w-full"
+        >
+          Rensa allt
+        </Button>
+
+        <div className="mt-6 grid items-start gap-6 sm:grid-cols-2">
+          <div>
             {year !== null && value !== null && (
               <div className="rounded-lg border p-4">
                 <p className="text-sm text-muted-foreground">
@@ -317,21 +335,8 @@ function ServicePage() {
                 {renderRows(AGE_ROWS)}
               </div>
             )}
-          </section>
-
-          <section className="space-y-4">
-            <h2 className="font-semibold">Mätarställning</h2>
-            <div className="space-y-2">
-              <Label htmlFor="km">Kilometer</Label>
-              <Input
-                id="km"
-                inputMode="numeric"
-                placeholder="t.ex. 60000"
-                value={km}
-                onChange={(e) => setKm(e.target.value)}
-              />
-            </div>
-
+          </div>
+          <div>
             {kmValue !== null && (
               <div className="rounded-lg border p-4">
                 <p className="text-sm text-muted-foreground">
@@ -344,7 +349,7 @@ function ServicePage() {
                 {renderRows(KM_ROWS)}
               </div>
             )}
-          </section>
+          </div>
         </div>
 
         <section className="mt-8 space-y-4">
