@@ -120,6 +120,14 @@ function ServicePage() {
   function changeManual(id: number, field: keyof Omit<ManualText, "id">, text: string) {
     setManuals(manuals.map((m) => (m.id === id ? { ...m, [field]: text } : m)));
   }
+  function clearAll() {
+    setMonths("");
+    setYearText("");
+    setPick(null);
+    setKm("");
+    setManuals([blankManual(nextId)]);
+    setNextId(nextId + 1);
+  }
   function addManual() {
     setManuals([...manuals, blankManual(nextId)]);
     setNextId(nextId + 1);
@@ -228,7 +236,17 @@ function ServicePage() {
           Skriv in ålder och mätarställning så visas tilläggsservicarna som träffar.
         </p>
 
-        <div className="mt-6 grid gap-6 sm:grid-cols-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          onClick={clearAll}
+          className="mt-6 w-full"
+        >
+          Rensa allt
+        </Button>
+
+        <div className="mt-4 grid gap-6 sm:grid-cols-2">
           <section className="space-y-4">
             <h2 className="font-semibold">Ålder</h2>
             <div className="grid grid-cols-2 gap-3">
