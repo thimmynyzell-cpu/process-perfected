@@ -1,5 +1,6 @@
 import {
   ageRule,
+  normalizeInterval,
   manualBasis,
   timesDone,
   manualHits,
@@ -161,10 +162,14 @@ describe("manualHits", () => {
     expect(manualHits(manual, { year: 10, km: 40_000 })).toEqual({ months: [120], km: [35_000] });
   });
 
-  it("gives only the first occurrence when no interval follows", () => {
-    const once = { monthFirst: 120, monthEvery: null, kmFirst: null, kmEvery: null };
-    expect(manualHits(once, { year: 10, km: 1 })).toEqual({ months: [120], km: null });
-    expect(manualHits(once, { year: 15, km: 1 }).months).toEqual([]);
+  it("repeats a lone first value as the interval", () => {
+    const lone = { monthFirst: 48, monthEvery: null, kmFirst: null, kmEvery: null };
+    expect(manualHits(lone, { year: 4, km: 1 })).toEqual({ months: [48], km: null });
+    expect(manualHits(lone, { year: 8, km: 1 }).months).toEqual([96]);
+    expect(manualHits(lone, { year: 9, km: 1 }).months).toEqual([]);
+    expect(normalizeInterval(48, null)).toEqual({ first: 48, every: 48 });
+    // 120 månader gamla bilen har haft 48:e och 96:e månaden
+    expect(timesDone(48, 48, 120)).toBe(2);
   });
 
   it("uses the interval as first occurrence when no first is given", () => {

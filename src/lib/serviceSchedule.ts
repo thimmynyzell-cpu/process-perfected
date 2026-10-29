@@ -133,32 +133,39 @@ export type Manual = {
 
 // Tillfällena per del, eller null för en del som inte används eller inte går att räkna
 // ännu (åldern eller mätarställningen saknas).
+// Första gång och intervall för en del. Fylls bara ett av dem i gäller det som båda, så
+// "48" betyder var 48:e (48, 96, 144 …). Null om inget (giltigt) är ifyllt.
+export function normalizeInterval(
+  first: number | null,
+  every: number | null,
+): { first: number; every: number } | null {
+  const f = first !== null && first > 0 ? first : null;
+  const e = every !== null && every > 0 ? every : null;
+  const both = f ?? e;
+  return both === null ? null : { first: both, every: e ?? both };
+}
+
+// Tillfällena per del, eller null för en del som inte används eller inte går att räkna
+// ännu (åldern eller mätarställningen saknas).
 export function manualHits(
   m: Manual,
   ctx: { year: number | null; km: number | null },
 ): { months: number[] | null; km: number[] | null } {
-  const every = (n: number | null) => (n !== null && n > 0 ? n : null);
-  const monthFirst = m.monthFirst ?? every(m.monthEvery);
-  const kmFirst = m.kmFirst ?? every(m.kmEvery);
+  const mo = normalizeInterval(m.monthFirst, m.monthEvery);
+  const k = normalizeInterval(m.kmFirst, m.kmEvery);
   return {
     months:
-      monthFirst === null || ctx.year === null
+      mo === null || ctx.year === null
         ? null
-        : occurrences(monthFirst, every(m.monthEvery), (ctx.year - 1) * 12, ctx.year * 12, false),
+        : occurrences(mo.first, mo.every, (ctx.year - 1) * 12, ctx.year * 12, false),
     km:
-      kmFirst === null || ctx.km === null
+      k === null || ctx.km === null
         ? null
-        : occurrences(
-            kmFirst,
-            every(m.kmEvery),
-            Math.max(0, ctx.km - KM_STEP),
-            ctx.km + KM_STEP,
-            true,
-          ),
+        : occurrences(k.first, k.every, Math.max(0, ctx.km - KM_STEP), ctx.km + KM_STEP, true),
   };
 }
 
-// Hur många gången intervallet då har genomförts, räknat med tillfället `hit`.
+// Hur många gånger intervallet då har genomförts, räknat med tillfället `hit`.
 export function occurrenceFrom(first: number, every: number | null, hit: number): number {
   return every === null ? 1 : Math.round((hit - first) / every) + 1;
 }
@@ -177,11 +184,10 @@ export function manualBasis(
   m: Manual,
   ctx: { year: number | null; km: number | null },
 ): { months: number; km: number; choice: "months" | "km" | "equal" } | null {
-  const every = (n: number | null) => (n !== null && n > 0 ? n : null);
-  const monthFirst = m.monthFirst ?? every(m.monthEvery);
-  const kmFirst = m.kmFirst ?? every(m.kmEvery);
-  if (monthFirst === null || kmFirst === null || ctx.year === null || ctx.km === null) return null;
-  const months = timesDone(monthFirst, every(m.monthEvery), ctx.year * 12);
-  const km = timesDone(kmFirst, every(m.kmEvery), ctx.km + KM_STEP);
+  const mo = normalizeInterval(m.monthFirst, m.monthEvery);
+  const k = normalizeInterval(m.kmFirst, m.kmEvery);
+  if (mo === null || k === null || ctx.year === null || ctx.km === null) return null;
+  const months = timesDone(mo.first, mo.every, ctx.year * 12);
+  const km = timesDone(k.first, k.every, ctx.km + KM_STEP);
   return { months, km, choice: months === km ? "equal" : months > km ? "months" : "km" };
 }

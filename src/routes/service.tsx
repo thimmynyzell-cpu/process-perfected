@@ -12,6 +12,7 @@ import {
   kmRule,
   manualBasis,
   manualHits,
+  normalizeInterval,
   monthsToYear,
   occurrenceFrom,
   occurrenceNumber,
@@ -173,8 +174,8 @@ function ServicePage() {
     const monthEvery = parse(m.monthEvery);
     const kmFirst = parse(m.kmFirst);
     const kmEvery = parse(m.kmEvery);
-    const usesMonths = monthFirst !== null || monthEvery !== null;
-    const usesKm = kmFirst !== null || kmEvery !== null;
+    const usesMonths = normalizeInterval(monthFirst, monthEvery) !== null;
+    const usesKm = normalizeInterval(kmFirst, kmEvery) !== null;
     if (!usesMonths && !usesKm) return null;
 
     const mYear = year;
@@ -185,8 +186,7 @@ function ServicePage() {
     const times = (n: number) => `Genomförd ${n} ${n === 1 ? "gång" : "gånger"} hittills.`;
     const lines: string[] = [];
     if (usesMonths) {
-      const first = monthFirst ?? monthEvery!;
-      const every = monthEvery !== null && monthEvery > 0 ? monthEvery : null;
+      const { first, every } = normalizeInterval(monthFirst, monthEvery)!;
       lines.push(
         hits.months === null
           ? "Ange ålder för att räkna på månader."
@@ -201,8 +201,7 @@ function ServicePage() {
       );
     }
     if (usesKm) {
-      const first = kmFirst ?? kmEvery!;
-      const every = kmEvery !== null && kmEvery > 0 ? kmEvery : null;
+      const { first, every } = normalizeInterval(kmFirst, kmEvery)!;
       lines.push(
         hits.km === null
           ? "Ange mätarställning för att räkna på kilometer."
@@ -242,7 +241,6 @@ function ServicePage() {
                   id="months"
                   inputMode="numeric"
                   autoFocus
-                  placeholder="t.ex. 144"
                   value={months}
                   onChange={(e) => changeMonths(e.target.value)}
                 />
@@ -252,7 +250,6 @@ function ServicePage() {
                 <Input
                   id="year"
                   inputMode="decimal"
-                  placeholder="t.ex. 12"
                   value={yearText}
                   onChange={(e) => changeYear(e.target.value)}
                 />
@@ -267,7 +264,6 @@ function ServicePage() {
               <Input
                 id="km"
                 inputMode="numeric"
-                placeholder="t.ex. 60000"
                 value={km}
                 onChange={(e) => setKm(e.target.value)}
               />
@@ -353,8 +349,9 @@ function ServicePage() {
         <section className="mt-8 space-y-4">
           <h2 className="font-semibold">Eget intervall</h2>
           <p className="text-sm text-muted-foreground">
-            Skriv in första gången och därefter varje. Fyll i månader, kilometer eller båda på samma
-            intervall. Lämnar du &quot;därefter varje&quot; tomt räknas bara första gången.
+            Skriv in första gången och därefter varje. Fyller du bara i ett av fälten gäller det som
+            intervall, så 48 betyder var 48:e månad. Fyll i månader, kilometer eller båda på samma
+            intervall.
           </p>
           {manuals.map((m, i) => {
             const result = manualResult(m);
@@ -393,7 +390,6 @@ function ServicePage() {
                       <Input
                         id={`mf${m.id}`}
                         inputMode="numeric"
-                        placeholder="120"
                         value={m.monthFirst}
                         onChange={(e) => changeManual(m.id, "monthFirst", e.target.value)}
                       />
@@ -405,7 +401,6 @@ function ServicePage() {
                       <Input
                         id={`me${m.id}`}
                         inputMode="numeric"
-                        placeholder="60"
                         value={m.monthEvery}
                         onChange={(e) => changeManual(m.id, "monthEvery", e.target.value)}
                       />
@@ -419,7 +414,6 @@ function ServicePage() {
                       <Input
                         id={`kf${m.id}`}
                         inputMode="numeric"
-                        placeholder="35000"
                         value={m.kmFirst}
                         onChange={(e) => changeManual(m.id, "kmFirst", e.target.value)}
                       />
@@ -431,7 +425,6 @@ function ServicePage() {
                       <Input
                         id={`ke${m.id}`}
                         inputMode="numeric"
-                        placeholder="120000"
                         value={m.kmEvery}
                         onChange={(e) => changeManual(m.id, "kmEvery", e.target.value)}
                       />
