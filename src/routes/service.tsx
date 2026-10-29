@@ -17,6 +17,7 @@ import {
   occurrenceNumber,
   ordinal,
   ruleHits,
+  timesDone,
   yearChoices,
   type Rule,
 } from "@/lib/serviceSchedule";
@@ -36,8 +37,13 @@ export const Route = createFileRoute("/service")({
 
 const fmt = (n: number) => n.toLocaleString("sv-SE");
 
-function parse(text: string): number | null {
-  const n = Number(text.replace(/\s/g, "").replace(",", "."));
+// Punkt som tusentalsavgränsare räknas med (35.000 = 35000), utom i årsfältet där 3.5 är ett
+// decimaltal.
+function parse(text: string, dotThousands = true): number | null {
+  const t = text.replace(/\s/g, "");
+  const n = Number(
+    dotThousands && /^\d{1,3}(\.\d{3})+$/.test(t) ? t.replace(/\./g, "") : t.replace(",", "."),
+  );
   return text.trim() !== "" && Number.isFinite(n) && n >= 0 ? n : null;
 }
 
@@ -62,6 +68,9 @@ type ManualText = {
   monthEvery: string;
   kmFirst: string;
   kmEvery: string;
+  // Bilens ålder och mätarställning för just det här intervallet. Tomt = värdena ovan.
+  vAge: string;
+  vKm: string;
 };
 
 const blankManual = (id: number): ManualText => ({
@@ -70,6 +79,8 @@ const blankManual = (id: number): ManualText => ({
   monthEvery: "",
   kmFirst: "",
   kmEvery: "",
+  vAge: "",
+  vKm: "",
 });
 
 function Tick({ on }: { on: boolean }) {
@@ -102,7 +113,7 @@ function ServicePage() {
     setPick(null);
   }
   function changeYear(text: string) {
-    const y = parse(text);
+    const y = parse(text, false);
     setYearText(text);
     setMonths(y === null ? "" : String(Math.round(y * 12)));
     setPick(null);
@@ -163,7 +174,14 @@ function ServicePage() {
     const usesKm = kmFirst !== null || kmEvery !== null;
     if (!usesMonths && !usesKm) return null;
 
-    const hits = manualHits({ monthFirst, monthEvery, kmFirst, kmEvery }, ctx);
+    // Egna värden för bilen i rutan går före de överst.
+    const ownMonths = parse(m.vAge);
+    const mYear = ownMonths === null ? year : monthsToYear(ownMonths);
+    const mKm = parse(m.vKm) ?? kmValue;
+    const mctx = { year: mYear, km: mKm };
+
+    const hits = manualHits({ monthFirst, monthEvery, kmFirst, kmEvery }, mctx);
+    const times = (n: number) => `Genomförd ${n} ${n === 1 ? "gång" : "gånger"} hittills.`;
     const lines: string[] = [];
     if (usesMonths) {
       const first = monthFirst ?? monthEvery!;
@@ -171,12 +189,14 @@ function ServicePage() {
       lines.push(
         hits.months === null
           ? "Ange ålder för att räkna på månader."
-          : hits.months.length === 0
-            ? `Träffar inte år ${year}.`
-            : `Träffar år ${year}: ${hits.months
-                .slice(0, 5)
-                .map((h) => `${h} mån · ${ordinal(occurrenceFrom(first, every, h))}`)
-                .join(", ")}`,
+          : `${
+              hits.months.length === 0
+                ? `Träffar inte år ${mYear}.`
+                : `Träffar år ${mYear}: ${hits.months
+                    .slice(0, 5)
+                    .map((h) => `${h} mån · ${ordinal(occurrenceFrom(first, every, h))}`)
+                    .join(", ")}.`
+            } ${times(timesDone(first, every, mYear! * 12))}`,
       );
     }
     if (usesKm) {
@@ -185,17 +205,19 @@ function ServicePage() {
       lines.push(
         hits.km === null
           ? "Ange mätarställning för att räkna på kilometer."
-          : hits.km.length === 0
-            ? "Träffar inte mätarställningen."
-            : `Träffar mätarställningen: ${hits.km
-                .slice(0, 5)
-                .map((h) => `${fmt(h)} km · ${ordinal(occurrenceFrom(first, every, h))}`)
-                .join(", ")}`,
+          : `${
+              hits.km.length === 0
+                ? "Träffar inte mätarställningen."
+                : `Träffar mätarställningen: ${hits.km
+                    .slice(0, 5)
+                    .map((h) => `${fmt(h)} km · ${ordinal(occurrenceFrom(first, every, h))}`)
+                    .join(", ")}.`
+            } ${times(timesDone(first, every, mKm! + 10_000))}`,
       );
     }
     const on = (hits.months?.length ?? 0) > 0 || (hits.km?.length ?? 0) > 0;
     const basis =
-      usesMonths && usesKm ? manualBasis({ monthFirst, monthEvery, kmFirst, kmEvery }, ctx) : null;
+      usesMonths && usesKm ? manualBasis({ monthFirst, monthEvery, kmFirst, kmEvery }, mctx) : null;
     return { on, lines, basis };
   }
 
@@ -334,6 +356,32 @@ function ServicePage() {
                   )}
                 </div>
                 <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label htmlFor={`va${m.id}`} className="text-xs">
+                      Bilens ålder (mån)
+                    </Label>
+                    <Input
+                      id={`va${m.id}`}
+                      inputMode="numeric"
+                      placeholder={months.trim() !== "" ? months : "som ovan"}
+                      value={m.vAge}
+                      onChange={(e) => changeManual(m.id, "vAge", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor={`vk${m.id}`} className="text-xs">
+                      Mätarställning (km)
+                    </Label>
+                    <Input
+                      id={`vk${m.id}`}
+                      inputMode="numeric"
+                      placeholder={km.trim() !== "" ? km : "som ovan"}
+                      value={m.vKm}
+                      onChange={(e) => changeManual(m.id, "vKm", e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <Label htmlFor={`mf${m.id}`} className="text-xs">
