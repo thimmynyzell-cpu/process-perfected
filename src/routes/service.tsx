@@ -287,7 +287,7 @@ function ServicePage() {
             onClick={clearAll}
             className="w-1/4 min-w-28"
           >
-            Rensa allt
+            Rensa
           </Button>
         </div>
 
