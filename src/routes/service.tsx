@@ -279,15 +279,17 @@ function ServicePage() {
           </section>
         </div>
 
-        <Button
-          type="button"
-          variant="destructive"
-          size="lg"
-          onClick={clearAll}
-          className="mt-6 w-full"
-        >
-          Rensa allt
-        </Button>
+        <div className="mt-4 flex justify-end">
+          <Button
+            type="button"
+            variant="destructive"
+            size="lg"
+            onClick={clearAll}
+            className="w-1/4 min-w-28"
+          >
+            Rensa allt
+          </Button>
+        </div>
 
         <div className="mt-6 grid items-start gap-6 sm:grid-cols-2">
           <div>
