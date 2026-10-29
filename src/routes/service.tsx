@@ -192,8 +192,8 @@ function ServicePage() {
           ? "Ange ålder för att räkna på månader."
           : `${
               hits.months.length === 0
-                ? `Träffar inte år ${mYear}.`
-                : `Träffar år ${mYear}: ${hits.months
+                ? `Träffar inte år ${mYear} (${mYear! * 12}).`
+                : `Träffar år ${mYear} (${mYear! * 12}): ${hits.months
                     .slice(0, 5)
                     .map((h) => `${h} mån · ${ordinal(occurrenceFrom(first, every, h))}`)
                     .join(", ")}.`
@@ -303,7 +303,7 @@ function ServicePage() {
                   <div className="mt-3 space-y-2">
                     <p className="text-sm font-medium">
                       {isHalfYear(value)
-                        ? `Mitt emellan år ${choices[0]} och år ${choices[1]}. Välj år:`
+                        ? `Mitt emellan år ${choices[0]} (${choices[0]! * 12}) och år ${choices[1]} (${choices[1]! * 12}). Välj år:`
                         : "Välj år:"}
                     </p>
                     <div className="flex gap-2">
@@ -319,7 +319,7 @@ function ServicePage() {
                               : "rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent"
                           }
                         >
-                          År {c}
+                          År {c} ({c * 12})
                         </button>
                       ))}
                     </div>
@@ -327,7 +327,9 @@ function ServicePage() {
                 )}
                 <p className="mt-3 text-sm text-muted-foreground">
                   Tilläggsservicar för{" "}
-                  <span className="font-semibold text-foreground">år {year}</span>
+                  <span className="font-semibold text-foreground">
+                    år {year} ({year * 12})
+                  </span>
                 </p>
                 {matching(AGE_ROWS).length === 0 && (
                   <p className="mt-2 font-medium">Inga tilläggsservicar detta år.</p>
