@@ -250,7 +250,7 @@ function ServicePage() {
                 <Input
                   id="months"
                   placeholder="120"
-                  className="placeholder:text-muted-foreground/40"
+                  className="h-8 max-w-40 px-2 text-sm placeholder:text-muted-foreground/40"
                   inputMode="numeric"
                   autoFocus
                   value={months}
@@ -262,7 +262,7 @@ function ServicePage() {
                 <Input
                   id="year"
                   placeholder="10"
-                  className="placeholder:text-muted-foreground/40"
+                  className="h-8 max-w-40 px-2 text-sm placeholder:text-muted-foreground/40"
                   inputMode="decimal"
                   value={yearText}
                   onChange={(e) => changeYear(e.target.value)}
@@ -278,7 +278,7 @@ function ServicePage() {
               <Input
                 id="km"
                 placeholder="90000"
-                className="placeholder:text-muted-foreground/40"
+                className="h-8 max-w-40 px-2 text-sm placeholder:text-muted-foreground/40"
                 inputMode="numeric"
                 value={km}
                 onChange={(e) => setKm(e.target.value)}
@@ -411,7 +411,7 @@ function ServicePage() {
                       <Input
                         id={`mf${m.id}`}
                         placeholder="120"
-                        className="placeholder:text-muted-foreground/40"
+                        className="h-8 max-w-40 px-2 text-sm placeholder:text-muted-foreground/40"
                         inputMode="numeric"
                         value={m.monthFirst}
                         onChange={(e) => changeManual(m.id, "monthFirst", e.target.value)}
@@ -424,7 +424,7 @@ function ServicePage() {
                       <Input
                         id={`me${m.id}`}
                         placeholder="60"
-                        className="placeholder:text-muted-foreground/40"
+                        className="h-8 max-w-40 px-2 text-sm placeholder:text-muted-foreground/40"
                         inputMode="numeric"
                         value={m.monthEvery}
                         onChange={(e) => changeManual(m.id, "monthEvery", e.target.value)}
@@ -439,7 +439,7 @@ function ServicePage() {
                       <Input
                         id={`kf${m.id}`}
                         placeholder="35000"
-                        className="placeholder:text-muted-foreground/40"
+                        className="h-8 max-w-40 px-2 text-sm placeholder:text-muted-foreground/40"
                         inputMode="numeric"
                         value={m.kmFirst}
                         onChange={(e) => changeManual(m.id, "kmFirst", e.target.value)}
@@ -452,7 +452,7 @@ function ServicePage() {
                       <Input
                         id={`ke${m.id}`}
                         placeholder="120000"
-                        className="placeholder:text-muted-foreground/40"
+                        className="h-8 max-w-40 px-2 text-sm placeholder:text-muted-foreground/40"
                         inputMode="numeric"
                         value={m.kmEvery}
                         onChange={(e) => changeManual(m.id, "kmEvery", e.target.value)}
