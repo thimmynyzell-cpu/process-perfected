@@ -35,13 +35,9 @@ export function servicesForYear(year: number): ExtraService[] {
   );
 }
 
-// Körsträcksintervall: var 5 000 km (5 000, 10 000, 15 000 … upp till 150 000 km).
+// Körsträcksintervall: bara var 10 000 km (10 000, 20 000 … upp till 150 000 km).
 export const KM_STEP = 10_000;
-export const KM_INTERVAL_STEP = 5_000;
-export const KM_INTERVALS: number[] = Array.from(
-  { length: 30 },
-  (_, i) => (i + 1) * KM_INTERVAL_STEP,
-);
+export const KM_INTERVALS: number[] = Array.from({ length: 15 }, (_, i) => (i + 1) * KM_STEP);
 
 // Alla mätarställningar där intervallet infaller inom ±10 000 km från kundens
 // mätarställning (gränserna räknas med).

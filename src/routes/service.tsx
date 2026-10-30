@@ -355,6 +355,9 @@ function ServicePage() {
                   Intervall mellan {fmt(Math.max(0, kmValue - 10_000))} och {fmt(kmValue + 10_000)}{" "}
                   km
                 </p>
+                <p className="mt-2 text-sm font-bold">
+                  Endast intervall på 10 000 km tas med (10 000, 20 000, 30 000 …).
+                </p>
                 {matching(KM_ROWS).length === 0 && (
                   <p className="mt-2 font-medium">Inga körsträcksintervall träffar.</p>
                 )}

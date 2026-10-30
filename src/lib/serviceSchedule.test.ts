@@ -64,14 +64,13 @@ describe("kmHits", () => {
 
   it("takes everything that falls between km-10 000 and km+10 000", () => {
     expect(hitting(90_000)).toEqual([
-      5_000, 10_000, 15_000, 20_000, 25_000, 30_000, 40_000, 45_000, 50_000, 80_000, 85_000, 90_000,
-      95_000, 100_000,
+      10_000, 20_000, 30_000, 40_000, 50_000, 80_000, 90_000, 100_000,
     ]);
     expect(kmHits(90_000, 20_000)).toEqual([80_000, 100_000]);
     expect(kmHits(90_000, 60_000)).toEqual([]);
   });
   it("never counts km 0", () => {
-    expect(hitting(0)).toEqual([5_000, 10_000]);
+    expect(hitting(0)).toEqual([10_000]);
     expect(kmHits(5_000, 10_000)).toEqual([10_000]);
   });
 });
