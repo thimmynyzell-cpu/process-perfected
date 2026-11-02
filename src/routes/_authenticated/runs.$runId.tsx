@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Eye, EyeOff, Printer } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, ChevronRight, Eye, EyeOff, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
@@ -118,6 +118,12 @@ function RunView({ ctx }: { ctx: OrgContext }) {
   const done = run.status === "completed";
   const filled = items.filter((i) => isFilled(i, answers[i.id])).length;
   const pct = items.length ? Math.round((filled / items.length) * 100) : 0;
+  const requiredLeft = items.filter((i) => i.required && !extra.has(i.id) && !isFilled(i, answers[i.id]));
+  const chapterStats = (c: string) => {
+    const inC = items.filter((it) => (it.section ?? "").trim() === c);
+    return { total: inC.length, done: inC.filter((it) => isFilled(it, answers[it.id])).length };
+  };
+  const lastChapter = chapterIdx < 0 || chapterIdx >= chapters.length - 1;
 
   async function persist(itemId: string, next: Answer) {
     setAnswers((prev) => ({ ...prev, [itemId]: next }));
@@ -166,7 +172,7 @@ function RunView({ ctx }: { ctx: OrgContext }) {
   }
 
   return (
-    <div className="pb-28">
+    <div className="pb-32">
       <Link to="/history" className="no-print mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft className="size-4" /> {t("common.back")}
       </Link>
@@ -176,7 +182,7 @@ function RunView({ ctx }: { ctx: OrgContext }) {
           <p className="text-sm text-muted-foreground">
             {run.templates?.title} · {t("templates.version")} {run.template_versions?.version}
           </p>
-          <h1 className="text-2xl font-semibold md:text-3xl">{run.reference || "—"}</h1>
+          <h1 className="font-display text-2xl font-semibold md:text-3xl">{run.reference || "—"}</h1>
           <p className="mt-1 text-xs text-muted-foreground">
             {t("run.startedAt")} {new Date(run.started_at).toLocaleString()}
             {run.due_at && ` · ${t("run.due")} ${new Date(run.due_at).toLocaleString()}`}
@@ -212,42 +218,46 @@ function RunView({ ctx }: { ctx: OrgContext }) {
       </div>
 
       {chapters.length > 1 && (
-        <div className="mb-4 flex items-center gap-2">
-          <Button
-            size="icon"
-            variant="outline"
-            aria-label={t("section.prev")}
-            disabled={chapterIdx <= 0}
-            onClick={() => goTo(chapters[chapterIdx - 1]!)}
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
-          <select
-            className={nativeSelect + " flex-1 font-medium"}
-            aria-label={t("section.title")}
-            value={activeChapter ?? ""}
-            onChange={(e) => goTo(e.target.value)}
-          >
+        <nav className="no-print mb-5" aria-label={t("section.title")}>
+          <ol className="flex flex-wrap gap-2">
             {chapters.map((c, i) => {
-              const inC = items.filter((it) => (it.section ?? "").trim() === c);
-              const doneC = inC.filter((it) => isFilled(it, answers[it.id])).length;
+              const st = chapterStats(c);
+              const complete = st.total > 0 && st.done === st.total;
+              const active = c === activeChapter;
               return (
-                <option key={c} value={c}>
-                  {i + 1}. {c} ({doneC}/{inC.length})
-                </option>
+                <li key={c} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => goTo(c)}
+                    aria-current={active ? "step" : undefined}
+                    className={cn(
+                      "flex items-center gap-2 rounded-full border py-1.5 pl-1.5 pr-3.5 text-sm transition-colors",
+                      active
+                        ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                        : complete
+                          ? "border-success/40 bg-success/10 text-success hover:bg-success/15"
+                          : "bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "flex size-6 items-center justify-center rounded-full text-xs font-semibold",
+                        active ? "bg-primary-foreground/20" : complete ? "bg-success text-success-foreground" : "bg-muted",
+                      )}
+                    >
+                      {complete && !active ? <Check className="size-3.5" /> : i + 1}
+                    </span>
+                    <span className="font-medium">{c}</span>
+                    <span className={cn("text-xs tabular-nums", active ? "opacity-80" : "opacity-70")}>
+                      {st.done}/{st.total}
+                    </span>
+                  </button>
+                  {i < chapters.length - 1 && <ChevronRight className="size-4 text-muted-foreground/50" />}
+                </li>
               );
             })}
-          </select>
-          <Button
-            size="icon"
-            variant="outline"
-            aria-label={t("section.next")}
-            disabled={chapterIdx >= chapters.length - 1}
-            onClick={() => goTo(chapters[chapterIdx + 1]!)}
-          >
-            <ChevronRight className="size-4" />
-          </Button>
-        </div>
+          </ol>
+        </nav>
       )}
 
       <div className="space-y-6">
@@ -263,7 +273,10 @@ function RunView({ ctx }: { ctx: OrgContext }) {
                 const a = current(item.id);
                 const ok = isFilled(item, a);
                 return (
-                  <li key={item.id} className="space-y-3 p-4">
+                  <li
+                    key={item.id}
+                    className={cn("space-y-3 p-4 transition-colors", ok && "bg-success/5")}
+                  >
                     {item.type === "checkbox" && Array.isArray(item.options) && item.options.length > 0 ? (
                       <>
                         <ItemLabel item={item} ok={ok} extra={extra.has(item.id)} />
@@ -369,18 +382,48 @@ function RunView({ ctx }: { ctx: OrgContext }) {
         ))}
       </div>
 
-      {chapters.length > 1 && chapterIdx < chapters.length - 1 && (
-        <div className="mt-4 flex justify-end">
-          <Button variant="outline" onClick={() => goTo(chapters[chapterIdx + 1]!)}>
-            {t("section.next")}: {chapters[chapterIdx + 1]} <ChevronRight className="size-4" />
-          </Button>
-        </div>
-      )}
+      {!done && activeChapter && chapters.length > 1 && (() => {
+        const st = chapterStats(activeChapter);
+        return st.total > 0 && st.done === st.total ? (
+          <p className="mt-4 flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
+            <CheckCircle2 className="size-4" />
+            {t("run.sectionDone")}
+            {lastChapter ? ` · ${t("run.lastSectionHint")}` : ""}
+          </p>
+        ) : null;
+      })()}
 
       {!done && (
-        <div className="no-print fixed inset-x-0 bottom-0 z-10 border-t bg-background/90 p-4 backdrop-blur md:left-64">
-          <div className="mx-auto max-w-5xl">
-            <Button size="lg" className="w-full" onClick={complete}>
+        <div className="no-print fixed inset-x-0 bottom-0 z-10 border-t bg-background/90 p-3 backdrop-blur md:left-64 md:p-4">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-3">
+            <p className="w-full min-w-0 text-sm sm:w-auto sm:flex-1">
+              {requiredLeft.length ? (
+                <span className="text-muted-foreground">{t("run.remaining", { count: requiredLeft.length })}</span>
+              ) : (
+                <span className="flex items-center gap-1.5 font-medium text-success">
+                  <CheckCircle2 className="size-4" /> {t("run.allRequiredDone")}
+                </span>
+              )}
+              {chapters.length > 1 && (
+                <span className="ml-2 text-xs text-muted-foreground">
+                  · {t("run.stepOf", { n: chapterIdx + 1, total: chapters.length })}
+                </span>
+              )}
+            </p>
+            {!lastChapter && (
+              <Button size="lg" className="flex-1 sm:flex-none" onClick={() => goTo(chapters[chapterIdx + 1]!)}>
+                {t("section.next")}: {chapters[chapterIdx + 1]} <ChevronRight className="size-5" />
+              </Button>
+            )}
+            <Button
+              size="lg"
+              variant={lastChapter ? "default" : "outline"}
+              className={cn(
+                "flex-1 sm:flex-none",
+                lastChapter && !requiredLeft.length && "bg-success text-success-foreground hover:bg-success/90",
+              )}
+              onClick={complete}
+            >
               <CheckCircle2 className="size-5" /> {t("run.complete")}
             </Button>
           </div>

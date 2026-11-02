@@ -48,13 +48,14 @@ function NavLinks({ onNavigate }: { onNavigate?: (() => void) | undefined }) {
             to={item.to}
             onClick={onNavigate}
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
               active
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
             )}
           >
-            <item.icon className="size-4" />
+            {active && <span className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-primary" />}
+            <item.icon className={cn("size-4", active && "text-primary")} />
             {t(item.key)}
           </Link>
         );
@@ -88,7 +89,7 @@ function SidebarInner({ onNavigate }: { onNavigate?: (() => void) | undefined })
             className="size-9 rounded-lg object-cover"
           />
         ) : (
-          <div className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 text-primary-foreground shadow-soft">
             <ListChecks className="size-5" />
           </div>
         )}
@@ -155,7 +156,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <span className="font-display text-base font-semibold">{t("app.name")}</span>
         </header>
 
-        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 md:px-8 md:py-10">
+        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 md:px-8 md:py-8">
           {children}
         </main>
       </div>
@@ -175,7 +176,7 @@ export function PageHeader({
   return (
     <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-semibold md:text-3xl">{title}</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-tight md:text-3xl">{title}</h1>
         {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
       </div>
       {action ? <div className="no-print flex gap-2">{action}</div> : null}

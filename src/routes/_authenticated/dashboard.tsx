@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { PlayCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, PlayCircle, TrendingUp } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useT } from "@/i18n";
 import { OrgPage, Spinner, EmptyState, type OrgContext } from "@/components/OrgPage";
@@ -34,19 +35,26 @@ function Dashboard({ ctx }: { ctx: OrgContext }) {
   const today = new Date().toDateString();
   const active = list.filter((r) => r.status === "in_progress");
   const completed = list.filter((r) => r.status === "completed");
+  const overdue = active.filter((r) => r.due_at && new Date(r.due_at).getTime() < now).length;
   const stats = [
-    { label: t("dashboard.active"), value: active.length },
+    { label: t("dashboard.active"), value: active.length, icon: Clock, tone: "text-primary bg-primary/10" },
     {
       label: t("dashboard.completedToday"),
       value: completed.filter((r) => r.completed_at && new Date(r.completed_at).toDateString() === today).length,
+      icon: CheckCircle2,
+      tone: "text-success bg-success/10",
     },
     {
       label: t("dashboard.completionRate"),
       value: list.length ? `${Math.round((completed.length / list.length) * 100)} %` : "–",
+      icon: TrendingUp,
+      tone: "text-chart-4 bg-chart-4/10",
     },
     {
       label: t("dashboard.overdue"),
-      value: active.filter((r) => r.due_at && new Date(r.due_at).getTime() < now).length,
+      value: overdue,
+      icon: AlertTriangle,
+      tone: overdue ? "text-destructive bg-destructive/10" : "text-muted-foreground bg-muted",
     },
   ];
 
@@ -64,15 +72,20 @@ function Dashboard({ ctx }: { ctx: OrgContext }) {
       />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {stats.map((s) => (
-          <div key={s.label} className="rounded-xl border bg-card p-4 shadow-soft">
-            <p className="text-xs text-muted-foreground">{s.label}</p>
-            <p className="mt-1 font-display text-2xl font-semibold">{s.value}</p>
+          <div key={s.label} className="flex items-start gap-3 rounded-xl border bg-card p-4 shadow-soft">
+            <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg", s.tone)}>
+              <s.icon className="size-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-xs text-muted-foreground">{s.label}</p>
+              <p className="mt-0.5 font-display text-2xl font-semibold tabular-nums">{s.value}</p>
+            </div>
           </div>
         ))}
       </div>
 
       <div className="mt-8 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">{t("dashboard.recent")}</h2>
+        <h2 className="font-display text-lg font-semibold">{t("dashboard.recent")}</h2>
         <Link to="/history" className="text-sm text-primary hover:underline">
           {t("dashboard.viewAll")}
         </Link>
@@ -83,7 +96,7 @@ function Dashboard({ ctx }: { ctx: OrgContext }) {
         ) : list.length === 0 ? (
           <EmptyState>{t("dashboard.empty")}</EmptyState>
         ) : (
-          <ul className="divide-y rounded-xl border bg-card">
+          <ul className="divide-y rounded-xl border bg-card shadow-soft">
             {list.slice(0, 8).map((r) => (
               <li key={r.id}>
                 <Link
