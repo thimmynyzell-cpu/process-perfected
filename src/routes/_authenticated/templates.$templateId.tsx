@@ -792,7 +792,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                   )}
                 </div>
                 {manage && (
-                  <div className={cn("flex gap-1", open ? "flex-col" : "flex-row flex-wrap justify-end @sm:max-w-24")}>
+                  <div className={cn("flex gap-1", open ? "flex-col" : "flex-row")}>
                     <Hint text={t(open ? "templates.lessSettings" : "templates.moreSettings")}>
                       <Button
                         type="button"

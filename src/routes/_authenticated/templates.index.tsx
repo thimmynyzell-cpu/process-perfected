@@ -212,6 +212,21 @@ function Templates({ ctx }: { ctx: OrgContext }) {
     qc.invalidateQueries({ queryKey: ["templates", ctx.orgId] });
   }
 
+  // Checklist being dragged onto a folder in the sidebar.
+  const [dragTpl, setDragTpl] = useState<string | null>(null);
+  const [overFolder, setOverFolder] = useState<string | null>(null);
+
+  async function moveToFolder(id: string, target: string) {
+    const category = target === NONE ? null : target;
+    const tpl = all.find((x) => x.id === id);
+    if (!tpl || folderOf(tpl.category) === folderOf(category)) return;
+    const { error } = await supabase.from("templates").update({ category }).eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    await logAudit(ctx.orgId, ctx.userId, "template.moved", "template", id, { folder: category });
+    toast.success(category ? t("templates.movedTo", { folder: category }) : t("templates.movedOut"));
+    qc.invalidateQueries({ queryKey: ["templates", ctx.orgId] });
+  }
+
   async function setStatus(id: string, status: "active" | "archived") {
     if (status === "active" && atLimit) { toast.error(t("limit.templates", { max: max ?? 0 })); return; }
     const { error } = await supabase
@@ -301,11 +316,26 @@ function Templates({ ctx }: { ctx: OrgContext }) {
                 count={countIn(f)}
                 active={folder === f}
                 onClick={() => setFolder(f)}
+                dropping={overFolder === f}
+                onDragOver={dragTpl ? () => setOverFolder(f) : undefined}
+                onDragLeave={() => setOverFolder((o) => (o === f ? null : o))}
+                onDrop={() => dragTpl && moveToFolder(dragTpl, f)}
               />
             ))}
-            {countIn(NONE) > 0 && (
-              <FolderButton icon={<Inbox className="size-4" />} label={t("templates.noFolder")} count={countIn(NONE)} active={folder === NONE} onClick={() => setFolder(NONE)} />
+            {(countIn(NONE) > 0 || dragTpl) && (
+              <FolderButton
+                icon={<Inbox className="size-4" />}
+                label={t("templates.noFolder")}
+                count={countIn(NONE)}
+                active={folder === NONE}
+                onClick={() => setFolder(NONE)}
+                dropping={overFolder === NONE}
+                onDragOver={dragTpl ? () => setOverFolder(NONE) : undefined}
+                onDragLeave={() => setOverFolder((o) => (o === NONE ? null : o))}
+                onDrop={() => dragTpl && moveToFolder(dragTpl, NONE)}
+              />
             )}
+            {dragTpl && <p className="px-2.5 pt-1 text-xs text-muted-foreground">{t("templates.dropOnFolder")}</p>}
           </nav>
           {manage && (
             <Button
@@ -397,7 +427,24 @@ function Templates({ ctx }: { ctx: OrgContext }) {
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {shown.map((tpl) => (
-            <div key={tpl.id} className="flex flex-col rounded-xl border bg-card p-5 shadow-soft">
+            <div
+              key={tpl.id}
+              draggable={manage && !tpl.delete_after}
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", tpl.id);
+                setDragTpl(tpl.id);
+              }}
+              onDragEnd={() => {
+                setDragTpl(null);
+                setOverFolder(null);
+              }}
+              className={cn(
+                "flex flex-col rounded-xl border bg-card p-5 shadow-soft transition-shadow hover:shadow-lift",
+                manage && !tpl.delete_after && "cursor-grab active:cursor-grabbing",
+                dragTpl === tpl.id && "opacity-50",
+              )}
+            >
               <div className="flex items-start justify-between gap-2">
                 {tpl.delete_after ? (
                   <span className="font-semibold">{tpl.title}</span>
@@ -412,7 +459,32 @@ function Templates({ ctx }: { ctx: OrgContext }) {
                 )}
                 <span className="shrink-0 text-xs text-muted-foreground">v{tpl.current_version}</span>
               </div>
-              {tpl.category && <p className="mt-1 text-xs font-medium text-primary">{tpl.category}</p>}
+              {manage && !tpl.delete_after ? (
+                <label className="mt-1 inline-flex w-fit items-center gap-1 text-xs font-medium text-primary">
+                  <Folder className="size-3" />
+                  <select
+                    aria-label={t("templates.moveToFolder")}
+                    className="cursor-pointer appearance-none bg-transparent pr-3 text-xs font-medium text-primary outline-none hover:underline"
+                    value={folderOf(tpl.category) || NONE}
+                    onChange={(e) => {
+                      if (e.target.value === NEW_FOLDER) {
+                        const name = window.prompt(t("templates.newFolderPrompt"))?.trim();
+                        if (name) moveToFolder(tpl.id, name);
+                      } else moveToFolder(tpl.id, e.target.value);
+                    }}
+                  >
+                    <option value={NONE}>{t("templates.noFolder")}</option>
+                    {folders.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
+                    <option value={NEW_FOLDER}>{t("templates.newFolder")}…</option>
+                  </select>
+                </label>
+              ) : (
+                tpl.category && <p className="mt-1 text-xs font-medium text-primary">{tpl.category}</p>
+              )}
               {tpl.delete_after && (
                 <p className="mt-2 inline-flex w-fit items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
                   <Trash2 className="size-3" /> {deleteLabel(tpl.delete_after)}
@@ -575,6 +647,7 @@ function Templates({ ctx }: { ctx: OrgContext }) {
 
 const ALL = "\u0000all";
 const NONE = "\u0000none";
+const NEW_FOLDER = "\u0000new";
 
 function FolderButton({
   icon,
@@ -582,21 +655,47 @@ function FolderButton({
   count,
   active,
   onClick,
+  dropping,
+  onDragOver,
+  onDragLeave,
+  onDrop,
 }: {
   icon: React.ReactNode;
   label: string;
   count: number;
   active: boolean;
   onClick: () => void;
+  dropping?: boolean;
+  onDragOver?: (() => void) | undefined;
+  onDragLeave?: () => void;
+  onDrop?: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-current={active ? "true" : undefined}
+      onDragOver={
+        onDragOver
+          ? (e) => {
+              e.preventDefault();
+              onDragOver();
+            }
+          : undefined
+      }
+      onDragLeave={onDragLeave}
+      onDrop={
+        onDrop
+          ? (e) => {
+              e.preventDefault();
+              onDrop();
+            }
+          : undefined
+      }
       className={cn(
         "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors",
         active ? "bg-primary/10 font-medium text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        dropping && "ring-2 ring-primary bg-primary/10",
       )}
     >
       {icon}
