@@ -93,6 +93,51 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   const [meta, setMeta] = useState({ title: "", description: "", category: "" });
   const [items, setItems] = useState<DraftItem[]>([]);
   const [saving, setSaving] = useState(false);
+  // Cards showing all their settings; the rest show one compact row.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [detailsAll, setDetailsAll] = useDetailsAll();
+  const isOpen = (key: string) => detailsAll || expanded.has(key);
+  const setOpen = (key: string, open: boolean) =>
+    setExpanded((set) => {
+      const next = new Set(set);
+      if (open) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  // Label input to focus after a question was added with Enter.
+  const [focusLabel, setFocusLabel] = useState<string | null>(null);
+  const labelRefs = useRef(new Map<string, HTMLInputElement>());
+  useEffect(() => {
+    if (!focusLabel) return;
+    const el = labelRefs.current.get(focusLabel);
+    if (el) {
+      el.focus();
+      setFocusLabel(null);
+    }
+  }, [focusLabel, items]);
+  // What was last loaded or saved, to tell unsaved changes apart.
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
+  const snapshot = JSON.stringify({ meta, items });
+  const dirty = savedSnapshot !== null && snapshot !== savedSnapshot;
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+  const saveRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        saveRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const [flowOpen, setFlowOpen] = useState(false);
   const [defaultLevels, setDefaultLevels] = useDefaultLevels();
   const [zoom, setZoom] = useZoom();
@@ -253,7 +298,12 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         options: Array.isArray(i.options) ? (i.options as string[]).join("\n") : "",
       })),
     );
+    setSavedSnapshot(null); // set once state has settled, see below
   }, [query.data]);
+  useEffect(() => {
+    // Record the loaded state as saved the first time items reflect the query.
+    if (savedSnapshot === null && query.data && items.length === query.data.items.length) setSavedSnapshot(snapshot);
+  }, [savedSnapshot, query.data, items.length, snapshot]);
 
   if (query.isPending) return <Spinner />;
   if (query.error || !query.data) return <p className="text-muted-foreground">{t("error.generic")}</p>;
@@ -307,6 +357,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
     const src = items[idx]!;
     const copy = { ...src, key: crypto.randomUUID(), baseKey: "", jumps: { ...src.jumps }, levels: [...src.levels] };
     setItems((list) => [...list.slice(0, idx + 1), copy, ...list.slice(idx + 1)]);
+    setOpen(copy.key, true);
     jumpToItem(copy.key);
   };
 
@@ -350,6 +401,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   const addAt = (at: number, section: string) => {
     const item = newItem(section);
     setItems((list) => [...list.slice(0, at), item, ...list.slice(at)]);
+    setFocusLabel(item.key);
     jumpToItem(item.key);
   };
   /**
@@ -371,16 +423,20 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         ? next.map((i) => (i.key === owner.key ? { ...i, jumps: { ...i.jumps, [MERGE]: item.key } } : i))
         : next;
     });
+    setFocusLabel(item.key);
     jumpToItem(item.key);
   };
 
-  const add = () =>
+  const add = () => {
+    const item = newItem(chapter || (items.at(-1)?.section ?? ""));
     setItems((list) => {
-      const item = newItem(chapter || (list.at(-1)?.section ?? ""));
       // With a section picked, the new question goes last in that section.
       const last = chapter ? list.map((i) => i.section.trim()).lastIndexOf(chapter) : -1;
       return last >= 0 ? [...list.slice(0, last + 1), item, ...list.slice(last + 1)] : [...list, item];
     });
+    setFocusLabel(item.key);
+    jumpToItem(item.key);
+  };
 
   /**
    * Passes a saved base checklist's changes on to the checklists that use it:
@@ -425,6 +481,10 @@ function Editor({ ctx }: { ctx: OrgContext }) {
     }
     return updated;
   }
+
+  saveRef.current = () => {
+    if (manage && dirty && !saving) void save();
+  };
 
   async function save() {
     if (!meta.title.trim()) return;
@@ -487,6 +547,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
         version: nextVersion,
       });
       toast.success(t("templates.saved"));
+      setSavedSnapshot(snapshot);
       qc.invalidateQueries({ queryKey: ["template", templateId] });
       qc.invalidateQueries({ queryKey: ["templates", ctx.orgId] });
     } catch (err) {
@@ -516,6 +577,7 @@ function Editor({ ctx }: { ctx: OrgContext }) {
   const renderCard = (item: DraftItem, inLane: boolean) => {
     const idx = items.findIndex((i) => i.key === item.key);
     const colors = answerColors(idx);
+    const open = isOpen(item.key);
     return (
             <div
               key={item.key}
@@ -577,10 +639,21 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                 </div>
                 <div className="grid flex-1 gap-3 @sm:grid-cols-2 @2xl:grid-cols-[1fr_10rem_10rem]">
                   <Input
+                    ref={(el) => {
+                      if (el) labelRefs.current.set(item.key, el);
+                      else labelRefs.current.delete(item.key);
+                    }}
                     className="@sm:col-span-2 @2xl:col-span-1"
                     placeholder={t("templates.label")}
                     value={item.label}
                     onChange={(e) => update(idx, { label: e.target.value })}
+                    onKeyDown={(e) => {
+                      // Enter adds the next question right below, like a list.
+                      if (e.key === "Enter" && manage) {
+                        e.preventDefault();
+                        addBelow(item.key);
+                      }
+                    }}
                   />
                   <select
                     className={nativeSelect}
@@ -610,6 +683,11 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                       </option>
                     ))}
                   </select>
+                  {!open && (
+                    <CompactSummary item={item} idx={idx} items={items} yesNo={yesNo} onOpen={() => setOpen(item.key, true)} />
+                  )}
+                  {open && (
+                  <>
                   <Input
                     className="@sm:col-span-2 @2xl:col-span-3"
                     placeholder={`${t("templates.helpText")} (${t("common.optional")})`}
@@ -710,9 +788,23 @@ function Editor({ ctx }: { ctx: OrgContext }) {
                       />
                     </div>
                   </div>
+                  </>
+                  )}
                 </div>
                 {manage && (
-                  <div className="flex flex-col gap-1">
+                  <div className={cn("flex gap-1", open ? "flex-col" : "flex-row flex-wrap justify-end @sm:max-w-24")}>
+                    <Hint text={t(open ? "templates.lessSettings" : "templates.moreSettings")}>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        aria-label={t(open ? "templates.lessSettings" : "templates.moreSettings")}
+                        aria-expanded={open}
+                        onClick={() => setOpen(item.key, !open)}
+                      >
+                        <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
+                      </Button>
+                    </Hint>
                     {(item.type === "checkbox" || item.type === "dropdown") && focusKey !== item.key && (
                       <Button
                         type="button"
@@ -972,13 +1064,22 @@ function Editor({ ctx }: { ctx: OrgContext }) {
               </DialogContent>
             </Dialog>
             {manage && (
-              <Button onClick={save} disabled={saving}>
-                {t("templates.saveNewVersion")}
-              </Button>
+              <Hint text={t("templates.saveHint")}>
+                <Button onClick={save} disabled={saving || !dirty} className="relative">
+                  {t("templates.saveNewVersion")}
+                  {dirty && <span className="absolute -right-1 -top-1 size-3 rounded-full bg-warning ring-2 ring-background" />}
+                </Button>
+              </Hint>
             )}
           </div>
         }
       />
+      {dirty && manage && (
+        <p className="-mt-3 mb-4 text-xs text-warning-foreground/80">
+          <span className="mr-1 inline-block size-2 rounded-full bg-warning align-middle" />
+          {t("templates.unsaved")}
+        </p>
+      )}
       {!manage && <p className="mb-4 text-sm text-muted-foreground">{t("templates.readOnly")}</p>}
       {query.data.tpl.is_base && (
         <p className="mb-4 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
@@ -1033,7 +1134,13 @@ function Editor({ ctx }: { ctx: OrgContext }) {
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">{t("templates.versionNote")}</p>
-          <div className="text-sm">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <Hint text={t("templates.detailsAllHint")}>
+              <label className="flex items-center gap-2 text-sm">
+                <Switch checked={detailsAll} onCheckedChange={setDetailsAll} />
+                {t("templates.detailsAll")}
+              </label>
+            </Hint>
             <LevelPicker
               label={t("level.newDefault")}
               hint={t("level.newDefaultHint")}
@@ -1643,5 +1750,79 @@ function TreeMenu({
       <p className="mb-1.5 font-semibold">{t("tree.main")}</p>
       {list(tree, MAIN, 0)}
     </div>
+  );
+}
+
+const DETAILS_KEY = "checklista.editorDetails";
+
+/** Whether every card shows all its settings; remembered per browser. */
+function useDetailsAll() {
+  const [all, setAll] = useState(() => {
+    try {
+      return localStorage.getItem(DETAILS_KEY) === "all";
+    } catch {
+      return false;
+    }
+  });
+  const set = (v: boolean) => {
+    setAll(v);
+    try {
+      localStorage.setItem(DETAILS_KEY, v ? "all" : "compact");
+    } catch {
+      // storage unavailable
+    }
+  };
+  return [all, set] as const;
+}
+
+/** One-line summary of a collapsed card's settings; click to open. */
+function CompactSummary({
+  item,
+  idx,
+  items,
+  yesNo,
+  onOpen,
+}: {
+  item: DraftItem;
+  idx: number;
+  items: DraftItem[];
+  yesNo: (v: string) => string;
+  onOpen: () => void;
+}) {
+  const t = useT();
+  const opts = optList(item.options);
+  const jumps = Object.entries(item.jumps).filter(([v]) => v !== MERGE);
+  const parent = item.parent ? items.find((p) => p.key === item.parent) : undefined;
+  const chips: { text: string; tone?: "warn" | "info" }[] = [];
+  if (item.required) chips.push({ text: t("common.required"), tone: "warn" });
+  if (opts.length) chips.push({ text: t("templates.optionCount", { count: opts.length }) });
+  if (jumps.length) chips.push({ text: t("templates.jumpCount", { count: jumps.length }), tone: "info" });
+  if (parent) chips.push({ text: `${t("flow.showIf")} ${items.indexOf(parent) + 1}. ${yesNo(item.show_when)}`, tone: "info" });
+  if (item.levels.length < LEVELS.length) chips.push({ text: item.levels.map((l) => t(`level.${l}`)).join(", ") });
+  if (item.help_text.trim()) chips.push({ text: t("templates.helpText") });
+  if (item.allow_note) chips.push({ text: t("templates.allowNote") });
+  if (item.allow_photo) chips.push({ text: t("templates.allowPhoto") });
+  void idx;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex min-h-6 flex-wrap items-center gap-1.5 text-left text-xs text-muted-foreground @sm:col-span-2 @2xl:col-span-3"
+      title={t("templates.moreSettings")}
+    >
+      {chips.length === 0 && <span className="italic">{t("templates.noSettings")}</span>}
+      {chips.map((c, n) => (
+        <span
+          key={n}
+          className={cn(
+            "rounded-full border px-2 py-0.5",
+            c.tone === "warn" && "border-warning/50 bg-warning/10 text-warning-foreground",
+            c.tone === "info" && "border-primary/30 bg-primary/5 text-primary",
+          )}
+        >
+          {c.text}
+        </span>
+      ))}
+    </button>
   );
 }
