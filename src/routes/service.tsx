@@ -228,7 +228,7 @@ function ServicePage() {
 
   function renderRows(rows: Row[]) {
     return (
-      <ul className="mt-3 space-y-2">
+      <ul className="mt-2 space-y-1">
         {matching(rows).map(({ row, hits }) => (
           <li key={row.key} className="flex flex-wrap items-center gap-x-2 font-medium">
             <Tick on />
@@ -315,16 +315,16 @@ function ServicePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <main className="mx-auto max-w-3xl px-4 py-10">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold">
+      <main className="mx-auto max-w-3xl px-4 py-6 text-sm">
+        <h1 className="flex items-center gap-2 text-xl font-semibold">
           <Wrench className="size-5" /> Serviceschema
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Skriv in ålder och mätarställning så visas tilläggsservicarna som träffar.
         </p>
 
-        <div className="mt-6 grid gap-6 sm:grid-cols-2">
-          <section className="space-y-4 rounded-lg border p-4">
+        <div className="mt-4 grid gap-6 sm:grid-cols-2">
+          <section className="space-y-2 rounded-lg border bg-card px-3.5 py-3">
             <h2 className="font-semibold">Ålder</h2>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
@@ -353,7 +353,7 @@ function ServicePage() {
             </div>
           </section>
 
-          <section className="space-y-4 rounded-lg border p-4">
+          <section className="space-y-2 rounded-lg border bg-card px-3.5 py-3">
             <h2 className="font-semibold">Mätarställning</h2>
             <div className="space-y-2">
               <Label htmlFor="km">Kilometer</Label>
@@ -381,16 +381,18 @@ function ServicePage() {
           </Button>
         </div>
 
-        <p className="mt-4 rounded-md border border-amber-500 bg-amber-500/10 p-3 text-sm">
-          <strong>OBS!</strong> De vanliga intervallen räknar som längst var {MAX_AGE_EVERY}:e månad
-          och var {fmt(MAX_KM_EVERY)} km. För intervall utöver varje {MAX_AGE_EVERY}:e månad eller
-          utöver varje {fmt(MAX_KM_EVERY)} km, räkna manuellt under Eget intervall.
-        </p>
+        {value !== null && kmValue !== null && (
+          <p className="mt-4 rounded-md border border-l-4 border-amber-500 bg-amber-500/10 px-3 py-2 text-sm animate-in fade-in slide-in-from-top-1 duration-300 motion-reduce:animate-none">
+            <strong>OBS!</strong> De vanliga intervallen räknar som längst var {MAX_AGE_EVERY}:e
+            månad och var {fmt(MAX_KM_EVERY)} km. För intervall utöver varje {MAX_AGE_EVERY}:e månad
+            eller utöver varje {fmt(MAX_KM_EVERY)} km, räkna manuellt under Eget intervall.
+          </p>
+        )}
 
         <div className="mt-4 grid items-start gap-6 sm:grid-cols-2">
           <div>
             {year !== null && value !== null && (
-              <div className="rounded-lg border p-4">
+              <div className="rounded-lg border bg-card px-3.5 py-3">
                 <p className="text-sm text-muted-foreground">
                   {value} månader
                   {value >= 12 && (
@@ -441,7 +443,7 @@ function ServicePage() {
           </div>
           <div>
             {kmValue !== null && (
-              <div className="rounded-lg border p-4">
+              <div className="rounded-lg border bg-card px-3.5 py-3">
                 <p className="text-sm text-muted-foreground">
                   Intervall mellan {fmt(Math.max(0, kmValue - 10_000))} och {fmt(kmValue + 10_000)}{" "}
                   km
@@ -458,7 +460,7 @@ function ServicePage() {
           </div>
         </div>
 
-        <section className="mt-8 space-y-4">
+        <section className="mt-6 space-y-3">
           <h2 className="font-semibold">Eget intervall</h2>
           <p className="text-sm text-muted-foreground">
             Rad 1 räknar bara ett intervall (varje X månader eller km). Rad 2 räknar första gången
@@ -467,7 +469,7 @@ function ServicePage() {
           </p>
           {manuals.map((m, i) => {
             return (
-              <div key={m.id} className="rounded-lg border p-4">
+              <div key={m.id} className="rounded-lg border bg-card px-3.5 py-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-medium">Eget intervall {i + 1}</h3>
                   <div className="flex items-center gap-1">
@@ -492,12 +494,12 @@ function ServicePage() {
                     )}
                   </div>
                 </div>
-                <div className="mt-4 space-y-5">
+                <div className="mt-3 space-y-3 divide-y [&>*+*]:pt-3">
                   <div>
                     <p className="text-xs font-medium text-muted-foreground">
                       Bara intervall (varje)
                     </p>
-                    <div className="mt-2 grid gap-4 sm:grid-cols-2">
+                    <div className="mt-2 flex flex-wrap gap-x-7 gap-y-2">
                       <NumField
                         id={`sm${m.id}`}
                         label="Varje (mån)"
@@ -526,7 +528,7 @@ function ServicePage() {
                     <p className="text-xs font-medium text-muted-foreground">
                       Första gången och därefter
                     </p>
-                    <div className="mt-2 grid gap-4 sm:grid-cols-2">
+                    <div className="mt-2 flex flex-wrap gap-x-7 gap-y-2">
                       <div className="grid grid-cols-2 gap-3">
                         <NumField
                           id={`mf${m.id}`}
