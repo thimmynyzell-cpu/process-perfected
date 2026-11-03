@@ -75,6 +75,9 @@ type ManualText = {
   monthEvery: string;
   kmFirst: string;
   kmEvery: string;
+  // Rad 1: bara "varje" i månader eller km.
+  simpleMonthEvery: string;
+  simpleKmEvery: string;
 };
 
 const blankManual = (id: number): ManualText => ({
@@ -83,6 +86,8 @@ const blankManual = (id: number): ManualText => ({
   monthEvery: "",
   kmFirst: "",
   kmEvery: "",
+  simpleMonthEvery: "",
+  simpleKmEvery: "",
 });
 
 function Tick({ on }: { on: boolean }) {
@@ -96,6 +101,77 @@ function Tick({ on }: { on: boolean }) {
     >
       {on ? "✓" : ""}
     </span>
+  );
+}
+
+function NumField({
+  id,
+  label,
+  placeholder,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (text: string) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={id} className="text-xs">
+        {label}
+      </Label>
+      <Input
+        id={id}
+        placeholder={placeholder}
+        className="h-8 max-w-32 px-2 text-sm placeholder:text-muted-foreground/40"
+        inputMode="numeric"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
+type ManualResult = {
+  on: boolean;
+  lines: string[];
+  basis: ReturnType<typeof manualBasis>;
+} | null;
+
+function ManualResultView({ result }: { result: ManualResult }) {
+  if (!result) return null;
+  const { basis } = result;
+  return (
+    <>
+      <div
+        className={
+          result.on
+            ? "mt-3 flex items-start gap-2 font-medium"
+            : "mt-3 flex items-start gap-2 text-muted-foreground"
+        }
+      >
+        <Tick on={result.on} />
+        <div className="space-y-0.5 text-sm">
+          {result.lines.map((l) => (
+            <p key={l}>{l}</p>
+          ))}
+        </div>
+      </div>
+      {basis && (
+        <p className="mt-3 rounded-md border bg-muted/40 p-3 text-sm font-medium">
+          Genomförd flest gånger:{" "}
+          {basis.choice === "equal"
+            ? `lika många (${basis.months} gånger på år och km). Välj själv.`
+            : `${basis.choice === "months" ? "år" : "kilometer"} (${
+                basis.choice === "months" ? basis.months : basis.km
+              } mot ${basis.choice === "months" ? basis.km : basis.months} gånger). Gå på ${
+                basis.choice === "months" ? "år" : "kilometer"
+              }.`}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -184,11 +260,12 @@ function ServicePage() {
     }`;
   }
 
-  function manualResult(m: ManualText) {
-    const monthFirst = parse(m.monthFirst);
-    const monthEvery = parse(m.monthEvery);
-    const kmFirst = parse(m.kmFirst);
-    const kmEvery = parse(m.kmEvery);
+  function manualResult(
+    monthFirst: number | null,
+    monthEvery: number | null,
+    kmFirst: number | null,
+    kmEvery: number | null,
+  ) {
     const usesMonths = normalizeInterval(monthFirst, monthEvery) !== null;
     const usesKm = normalizeInterval(kmFirst, kmEvery) !== null;
     if (!usesMonths && !usesKm) return null;
@@ -384,12 +461,11 @@ function ServicePage() {
         <section className="mt-8 space-y-4">
           <h2 className="font-semibold">Eget intervall</h2>
           <p className="text-sm text-muted-foreground">
-            Skriv in första gången och därefter varje. Fyller du bara i ett av fälten gäller det som
-            intervall, så 48 betyder var 48:e månad. Fyll i månader, kilometer eller båda på samma
-            intervall.
+            Rad 1 räknar bara ett intervall (varje X månader eller km). Rad 2 räknar första gången
+            och därefter. Fyller du bara i ett av fälten på rad 2 gäller det som intervall, så 48
+            betyder var 48:e månad.
           </p>
           {manuals.map((m, i) => {
-            const result = manualResult(m);
             return (
               <div key={m.id} className="rounded-lg border p-4">
                 <div className="flex items-center justify-between">
@@ -416,92 +492,84 @@ function ServicePage() {
                     )}
                   </div>
                 </div>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label htmlFor={`mf${m.id}`} className="text-xs">
-                        Första gången (mån)
-                      </Label>
-                      <Input
-                        id={`mf${m.id}`}
-                        placeholder="120"
-                        className="h-8 max-w-32 px-2 text-sm placeholder:text-muted-foreground/40"
-                        inputMode="numeric"
-                        value={m.monthFirst}
-                        onChange={(e) => changeManual(m.id, "monthFirst", e.target.value)}
+                <div className="mt-4 space-y-5">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Bara intervall (varje)
+                    </p>
+                    <div className="mt-2 grid gap-4 sm:grid-cols-2">
+                      <NumField
+                        id={`sm${m.id}`}
+                        label="Varje (mån)"
+                        placeholder="12"
+                        value={m.simpleMonthEvery}
+                        onChange={(t) => changeManual(m.id, "simpleMonthEvery", t)}
+                      />
+                      <NumField
+                        id={`sk${m.id}`}
+                        label="Varje (km)"
+                        placeholder="15000"
+                        value={m.simpleKmEvery}
+                        onChange={(t) => changeManual(m.id, "simpleKmEvery", t)}
                       />
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor={`me${m.id}`} className="text-xs">
-                        Därefter varje (mån)
-                      </Label>
-                      <Input
-                        id={`me${m.id}`}
-                        placeholder="60"
-                        className="h-8 max-w-32 px-2 text-sm placeholder:text-muted-foreground/40"
-                        inputMode="numeric"
-                        value={m.monthEvery}
-                        onChange={(e) => changeManual(m.id, "monthEvery", e.target.value)}
-                      />
-                    </div>
+                    <ManualResultView
+                      result={manualResult(
+                        null,
+                        parse(m.simpleMonthEvery),
+                        null,
+                        parse(m.simpleKmEvery),
+                      )}
+                    />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label htmlFor={`kf${m.id}`} className="text-xs">
-                        Första gången (km)
-                      </Label>
-                      <Input
-                        id={`kf${m.id}`}
-                        placeholder="35000"
-                        className="h-8 max-w-32 px-2 text-sm placeholder:text-muted-foreground/40"
-                        inputMode="numeric"
-                        value={m.kmFirst}
-                        onChange={(e) => changeManual(m.id, "kmFirst", e.target.value)}
-                      />
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Första gången och därefter
+                    </p>
+                    <div className="mt-2 grid gap-4 sm:grid-cols-2">
+                      <div className="grid grid-cols-2 gap-3">
+                        <NumField
+                          id={`mf${m.id}`}
+                          label="Första gången (mån)"
+                          placeholder="120"
+                          value={m.monthFirst}
+                          onChange={(t) => changeManual(m.id, "monthFirst", t)}
+                        />
+                        <NumField
+                          id={`me${m.id}`}
+                          label="Därefter varje (mån)"
+                          placeholder="60"
+                          value={m.monthEvery}
+                          onChange={(t) => changeManual(m.id, "monthEvery", t)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <NumField
+                          id={`kf${m.id}`}
+                          label="Första gången (km)"
+                          placeholder="35000"
+                          value={m.kmFirst}
+                          onChange={(t) => changeManual(m.id, "kmFirst", t)}
+                        />
+                        <NumField
+                          id={`ke${m.id}`}
+                          label="Därefter varje (km)"
+                          placeholder="120000"
+                          value={m.kmEvery}
+                          onChange={(t) => changeManual(m.id, "kmEvery", t)}
+                        />
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor={`ke${m.id}`} className="text-xs">
-                        Därefter varje (km)
-                      </Label>
-                      <Input
-                        id={`ke${m.id}`}
-                        placeholder="120000"
-                        className="h-8 max-w-32 px-2 text-sm placeholder:text-muted-foreground/40"
-                        inputMode="numeric"
-                        value={m.kmEvery}
-                        onChange={(e) => changeManual(m.id, "kmEvery", e.target.value)}
-                      />
-                    </div>
+                    <ManualResultView
+                      result={manualResult(
+                        parse(m.monthFirst),
+                        parse(m.monthEvery),
+                        parse(m.kmFirst),
+                        parse(m.kmEvery),
+                      )}
+                    />
                   </div>
                 </div>
-                {result && (
-                  <div
-                    className={
-                      result.on
-                        ? "mt-3 flex items-start gap-2 font-medium"
-                        : "mt-3 flex items-start gap-2 text-muted-foreground"
-                    }
-                  >
-                    <Tick on={result.on} />
-                    <div className="space-y-0.5 text-sm">
-                      {result.lines.map((l) => (
-                        <p key={l}>{l}</p>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {result?.basis && (
-                  <p className="mt-3 rounded-md border bg-muted/40 p-3 text-sm font-medium">
-                    Genomförd flest gånger:{" "}
-                    {result.basis.choice === "equal"
-                      ? `lika många (${result.basis.months} gånger på år och km). Välj själv.`
-                      : `${result.basis.choice === "months" ? "år" : "kilometer"} (${
-                          result.basis.choice === "months" ? result.basis.months : result.basis.km
-                        } mot ${
-                          result.basis.choice === "months" ? result.basis.km : result.basis.months
-                        } gånger). Gå på ${result.basis.choice === "months" ? "år" : "kilometer"}.`}
-                  </p>
-                )}
               </div>
             );
           })}
