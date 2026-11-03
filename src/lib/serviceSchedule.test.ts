@@ -1,5 +1,6 @@
 import {
   ageRule,
+  formatAge,
   surroundingOccurrences,
   normalizeInterval,
   manualBasis,
@@ -241,5 +242,16 @@ describe("surroundingOccurrences", () => {
       prev: 35_000,
       next: 155_000,
     });
+  });
+});
+
+describe("formatAge", () => {
+  it("writes the age as years and months instead of a decimal", () => {
+    expect(formatAge(172)).toBe("14 år och 4 månader");
+    expect(formatAge(171)).toBe("14 år och 3 månader");
+    expect(formatAge(144)).toBe("12 år");
+    expect(formatAge(13)).toBe("1 år och 1 månad");
+    expect(formatAge(5)).toBe("5 månader");
+    expect(formatAge(0)).toBe("0 månader");
   });
 });

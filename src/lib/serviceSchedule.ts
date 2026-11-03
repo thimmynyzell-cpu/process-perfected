@@ -199,3 +199,14 @@ export function surroundingOccurrences(
   const prev = first + Math.floor((at - first) / every) * every;
   return { prev, next: prev + every };
 }
+
+// Åldern som hela år och månader, t.ex. 172 månader = "14 år och 4 månader".
+export function formatAge(months: number): string {
+  const total = Math.round(months * 10) / 10;
+  const years = Math.floor(total / 12);
+  const rest = Math.round((total - years * 12) * 10) / 10;
+  const y = years === 0 ? null : `${years} år`;
+  const m =
+    rest === 0 ? null : `${String(rest).replace(".", ",")} ${rest === 1 ? "månad" : "månader"}`;
+  return [y, m].filter(Boolean).join(" och ") || "0 månader";
+}

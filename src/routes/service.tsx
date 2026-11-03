@@ -9,6 +9,7 @@ import {
   KM_INTERVALS,
   ageRule,
   isHalfYear,
+  formatAge,
   kmRule,
   manualBasis,
   manualHits,
@@ -304,10 +305,13 @@ function ServicePage() {
             {year !== null && value !== null && (
               <div className="rounded-lg border p-4">
                 <p className="text-sm text-muted-foreground">
-                  {value} månader ={" "}
-                  <span className="font-semibold text-foreground">
-                    {(value / 12).toLocaleString("sv-SE", { maximumFractionDigits: 2 })} år
-                  </span>
+                  {value} månader
+                  {value >= 12 && (
+                    <>
+                      {" "}
+                      = <span className="font-semibold text-foreground">{formatAge(value)}</span>
+                    </>
+                  )}
                 </p>
                 {choices.length > 1 && (
                   <div className="mt-3 space-y-2">
