@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus, Wrench, X } from "lucide-react";
+import { Megaphone, Plus, Wrench, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -125,7 +125,7 @@ function NumField({
       <Input
         id={id}
         placeholder={placeholder}
-        className="h-8 max-w-32 px-2 text-sm placeholder:text-muted-foreground/40"
+        className="h-8 max-w-32 rounded-full bg-muted/50 px-3 text-sm placeholder:text-muted-foreground/40 focus-visible:bg-background"
         inputMode="numeric"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -160,7 +160,7 @@ function ManualResultView({ result }: { result: ManualResult }) {
         </div>
       </div>
       {basis && (
-        <p className="mt-3 rounded-md border bg-muted/40 p-3 text-sm font-medium">
+        <p className="mt-3 rounded-xl bg-primary/10 px-3 py-2 text-sm font-semibold">
           Genomförd flest gånger:{" "}
           {basis.choice === "equal"
             ? `lika många (${basis.months} gånger på år och km). Välj själv.`
@@ -232,7 +232,7 @@ function ServicePage() {
         {matching(rows).map(({ row, hits }) => (
           <li key={row.key} className="flex flex-wrap items-center gap-x-2 font-medium">
             <Tick on />
-            <span className="whitespace-nowrap">{row.label}</span>
+            <span className="whitespace-nowrap font-semibold text-primary">{row.label}</span>
             <span className="text-sm font-normal text-muted-foreground">
               (
               {hits
@@ -316,152 +316,170 @@ function ServicePage() {
   return (
     <div className="min-h-screen bg-background">
       <main className="mx-auto max-w-3xl px-4 py-6 text-sm">
-        <h1 className="flex items-center gap-2 text-xl font-semibold">
-          <Wrench className="size-5" /> Serviceschema
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Skriv in ålder och mätarställning så visas tilläggsservicarna som träffar.
-        </p>
-
-        <div className="mt-4 grid gap-6 sm:grid-cols-2">
-          <section className="space-y-2 rounded-lg border bg-card px-3.5 py-3">
-            <h2 className="font-semibold">Ålder</h2>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="months">Antal månader</Label>
-                <Input
-                  id="months"
-                  placeholder="120"
-                  className="h-8 max-w-32 px-2 text-sm placeholder:text-muted-foreground/40"
-                  inputMode="numeric"
-                  autoFocus
-                  value={months}
-                  onChange={(e) => changeMonths(e.target.value)}
-                />
+        <section className="rounded-3xl bg-gradient-to-b from-primary/15 to-primary/[0.03] px-4 pb-5 pt-8 text-center">
+          <h1 className="flex items-center justify-center gap-2 text-3xl font-bold tracking-tight text-primary">
+            <Wrench className="size-6" /> Serviceschema
+          </h1>
+          <p className="mx-auto mt-1.5 max-w-prose text-muted-foreground">
+            Skriv in ålder och mätarställning så visas tilläggsservicarna som träffar.
+          </p>
+          <div className="mx-auto mt-5 grid w-full max-w-2xl gap-2.5">
+            <div className="flex flex-wrap items-end gap-x-6 gap-y-3 rounded-2xl bg-card px-4 py-3 text-left shadow-sm">
+              <div className="space-y-1.5">
+                <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  Ålder
+                </p>
+                <div className="flex gap-2.5">
+                  <div className="space-y-1">
+                    <Label htmlFor="months">Antal månader</Label>
+                    <Input
+                      id="months"
+                      placeholder="120"
+                      className="h-8 max-w-32 rounded-full bg-muted/50 px-3 text-sm placeholder:text-muted-foreground/40 focus-visible:bg-background"
+                      inputMode="numeric"
+                      autoFocus
+                      value={months}
+                      onChange={(e) => changeMonths(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="year">eller år</Label>
+                    <Input
+                      id="year"
+                      placeholder="10"
+                      className="h-8 max-w-32 rounded-full bg-muted/50 px-3 text-sm placeholder:text-muted-foreground/40 focus-visible:bg-background"
+                      inputMode="decimal"
+                      value={yearText}
+                      onChange={(e) => changeYear(e.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="year">eller år</Label>
-                <Input
-                  id="year"
-                  placeholder="10"
-                  className="h-8 max-w-32 px-2 text-sm placeholder:text-muted-foreground/40"
-                  inputMode="decimal"
-                  value={yearText}
-                  onChange={(e) => changeYear(e.target.value)}
-                />
+              <div className="hidden self-stretch border-l sm:block" aria-hidden="true" />
+              <div className="space-y-1.5">
+                <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  Mätarställning
+                </p>
+                <div className="space-y-1">
+                  <Label htmlFor="km">Kilometer</Label>
+                  <Input
+                    id="km"
+                    placeholder="90000"
+                    className="h-8 max-w-32 rounded-full bg-muted/50 px-3 text-sm placeholder:text-muted-foreground/40 focus-visible:bg-background"
+                    inputMode="numeric"
+                    value={km}
+                    onChange={(e) => setKm(e.target.value)}
+                  />
+                </div>
               </div>
             </div>
-          </section>
-
-          <section className="space-y-2 rounded-lg border bg-card px-3.5 py-3">
-            <h2 className="font-semibold">Mätarställning</h2>
-            <div className="space-y-2">
-              <Label htmlFor="km">Kilometer</Label>
-              <Input
-                id="km"
-                placeholder="90000"
-                className="h-8 max-w-32 px-2 text-sm placeholder:text-muted-foreground/40"
-                inputMode="numeric"
-                value={km}
-                onChange={(e) => setKm(e.target.value)}
-              />
-            </div>
-          </section>
-        </div>
-
-        <div className="mt-4 flex justify-end">
-          <Button
-            type="button"
-            variant="destructive"
-            size="lg"
-            onClick={clearAll}
-            className="w-1/4 min-w-28"
-          >
-            Rensa
-          </Button>
-        </div>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={clearAll}
+              className="w-1/4 min-w-28 justify-self-end rounded-full shadow-sm"
+            >
+              Rensa
+            </Button>
+          </div>
+        </section>
 
         {(months.trim() !== "" || yearText.trim() !== "" || km.trim() !== "") && (
-          <p className="mt-4 rounded-md border border-l-4 border-amber-500 bg-amber-500/10 px-3 py-2 text-sm animate-in fade-in slide-in-from-top-1 duration-300 motion-reduce:animate-none">
-            <strong>OBS!</strong> De vanliga intervallen räknar som längst var {MAX_AGE_EVERY}:e
-            månad och var {fmt(MAX_KM_EVERY)} km. För intervall utöver varje {MAX_AGE_EVERY}:e månad
-            eller utöver varje {fmt(MAX_KM_EVERY)} km, räkna manuellt under Eget intervall.
+          <p className="mt-4 flex items-start gap-2.5 rounded-xl border border-l-4 border-amber-500/70 bg-amber-500/10 px-4 py-3 animate-in fade-in slide-in-from-top-1 duration-300 motion-reduce:animate-none">
+            <Megaphone className="mt-0.5 size-4 shrink-0 text-amber-600" />
+            <span>
+              <strong>OBS!</strong> De vanliga intervallen räknar som längst var {MAX_AGE_EVERY}:e
+              månad och var {fmt(MAX_KM_EVERY)} km. För intervall utöver varje {MAX_AGE_EVERY}:e
+              månad eller utöver varje {fmt(MAX_KM_EVERY)} km, räkna manuellt under Eget intervall.
+            </span>
           </p>
         )}
 
         <div className="mt-4 grid items-start gap-6 sm:grid-cols-2">
           <div>
             {year !== null && value !== null && (
-              <div className="rounded-lg border bg-card px-3.5 py-3">
-                <p className="text-sm text-muted-foreground">
-                  {value} månader
-                  {value >= 12 && (
-                    <>
-                      {" "}
-                      = <span className="font-semibold text-foreground">{formatAge(value)}</span>
-                    </>
-                  )}
+              <div className="space-y-2">
+                <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  Tilläggsservicar
                 </p>
-                {choices.length > 1 && (
-                  <div className="mt-3 space-y-2">
-                    <p className="text-sm font-medium">
-                      {isHalfYear(value)
-                        ? `Mitt emellan år ${choices[0]} (${choices[0]! * 12}) och år ${choices[1]} (${choices[1]! * 12}). Välj år:`
-                        : "Välj år:"}
-                    </p>
-                    <div className="flex gap-2">
-                      {choices.map((c) => (
-                        <button
-                          key={c}
-                          type="button"
-                          aria-pressed={c === year}
-                          onClick={() => setPick(c)}
-                          className={
-                            c === year
-                              ? "rounded-md border border-primary bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
-                              : "rounded-md border px-3 py-1.5 text-sm font-medium hover:bg-accent"
-                          }
-                        >
-                          År {c} ({c * 12})
-                        </button>
-                      ))}
+                <div className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
+                  <p className="text-sm text-muted-foreground">
+                    {value} månader
+                    {value >= 12 && (
+                      <>
+                        {" "}
+                        = <span className="font-semibold text-foreground">{formatAge(value)}</span>
+                      </>
+                    )}
+                  </p>
+                  {choices.length > 1 && (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-sm font-medium">
+                        {isHalfYear(value)
+                          ? `Mitt emellan år ${choices[0]} (${choices[0]! * 12}) och år ${choices[1]} (${choices[1]! * 12}). Välj år:`
+                          : "Välj år:"}
+                      </p>
+                      <div className="flex gap-2">
+                        {choices.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            aria-pressed={c === year}
+                            onClick={() => setPick(c)}
+                            className={
+                              c === year
+                                ? "rounded-full border border-primary bg-primary px-3.5 py-1 text-sm font-semibold text-primary-foreground"
+                                : "rounded-full border bg-card px-3.5 py-1 text-sm font-medium hover:bg-accent"
+                            }
+                          >
+                            År {c} ({c * 12})
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-                <p className="mt-3 text-sm text-muted-foreground">
-                  Tilläggsservicar för{" "}
-                  <span className="font-semibold text-foreground">
-                    år {year} ({year * 12})
-                  </span>
-                </p>
-                {matching(AGE_ROWS).length === 0 && (
-                  <p className="mt-2 font-medium">Inga tilläggsservicar detta år.</p>
-                )}
-                {renderRows(AGE_ROWS)}
+                  )}
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Tilläggsservicar för{" "}
+                    <span className="font-semibold text-foreground">
+                      år {year} ({year * 12})
+                    </span>
+                  </p>
+                  {matching(AGE_ROWS).length === 0 && (
+                    <p className="mt-2 font-medium">Inga tilläggsservicar detta år.</p>
+                  )}
+                  {renderRows(AGE_ROWS)}
+                </div>
               </div>
             )}
           </div>
           <div>
             {kmValue !== null && (
-              <div className="rounded-lg border bg-card px-3.5 py-3">
-                <p className="text-sm text-muted-foreground">
-                  Intervall mellan {fmt(Math.max(0, kmValue - 10_000))} och {fmt(kmValue + 10_000)}{" "}
-                  km
+              <div className="space-y-2">
+                <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  Kilometerintervall
                 </p>
-                <p className="mt-2 text-sm font-bold">
-                  Endast intervall på 10 000 km tas med (10 000, 20 000, 30 000 …).
-                </p>
-                {matching(KM_ROWS).length === 0 && (
-                  <p className="mt-2 font-medium">Inga körsträcksintervall träffar.</p>
-                )}
-                {renderRows(KM_ROWS)}
+                <div className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
+                  <p className="text-sm text-muted-foreground">
+                    Intervall mellan {fmt(Math.max(0, kmValue - 10_000))} och{" "}
+                    {fmt(kmValue + 10_000)} km
+                  </p>
+                  <p className="mt-2 text-sm font-bold">
+                    Endast intervall på 10 000 km tas med (10 000, 20 000, 30 000 …).
+                  </p>
+                  {matching(KM_ROWS).length === 0 && (
+                    <p className="mt-2 font-medium">Inga körsträcksintervall träffar.</p>
+                  )}
+                  {renderRows(KM_ROWS)}
+                </div>
               </div>
             )}
           </div>
         </div>
 
         <section className="mt-6 space-y-3">
-          <h2 className="font-semibold">Eget intervall</h2>
+          <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Eget intervall
+          </h2>
           <p className="text-sm text-muted-foreground">
             Rad 1 räknar bara ett intervall (varje X månader eller km). Rad 2 räknar första gången
             och därefter. Fyller du bara i ett av fälten på rad 2 gäller det som intervall, så 48
@@ -469,9 +487,9 @@ function ServicePage() {
           </p>
           {manuals.map((m, i) => {
             return (
-              <div key={m.id} className="rounded-lg border bg-card px-3.5 py-3">
+              <div key={m.id} className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium">Eget intervall {i + 1}</h3>
+                  <h3 className="font-semibold text-primary">Eget intervall {i + 1}</h3>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
@@ -575,7 +593,12 @@ function ServicePage() {
               </div>
             );
           })}
-          <Button type="button" variant="outline" onClick={addManual}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={addManual}
+            className="rounded-full border-dashed border-primary text-primary hover:bg-primary/10"
+          >
             <Plus className="size-4" /> Lägg till eget intervall
           </Button>
         </section>
