@@ -326,7 +326,7 @@ function ServicePage() {
           <div className="mx-auto mt-5 grid w-full max-w-2xl gap-2.5">
             <div className="flex flex-wrap items-end gap-x-6 gap-y-3 rounded-2xl bg-card px-4 py-3 text-left shadow-sm">
               <div className="space-y-1.5">
-                <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-foreground/75">
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">
                   Ålder
                 </p>
                 <div className="flex gap-2.5">
@@ -357,7 +357,7 @@ function ServicePage() {
               </div>
               <div className="hidden self-stretch border-l sm:block" aria-hidden="true" />
               <div className="space-y-1.5">
-                <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-foreground/75">
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">
                   Mätarställning
                 </p>
                 <div className="space-y-1">
@@ -399,7 +399,7 @@ function ServicePage() {
           <div>
             {year !== null && value !== null && (
               <div className="space-y-2">
-                <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-foreground/75">
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">
                   Tilläggsservicar
                 </p>
                 <div className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
@@ -455,7 +455,7 @@ function ServicePage() {
           <div>
             {kmValue !== null && (
               <div className="space-y-2">
-                <p className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-foreground/75">
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">
                   Kilometerintervall
                 </p>
                 <div className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
@@ -477,19 +477,9 @@ function ServicePage() {
         </div>
 
         <section className="mt-6 space-y-3">
-          <h2 className="text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-foreground/75">
+          <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">
             Eget intervall
           </h2>
-          <div className="space-y-1 text-sm text-foreground/75">
-            <p>
-              <strong className="text-foreground">Rad 1</strong> räknar bara ett intervall, varje X
-              månader eller km.
-            </p>
-            <p>
-              <strong className="text-foreground">Rad 2</strong> räknar första gången och därefter.
-              Fyller du bara i ett av fälten gäller det som intervall, så 48 betyder var 48:e månad.
-            </p>
-          </div>
           {manuals.map((m, i) => {
             return (
               <div key={m.id} className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
@@ -519,8 +509,11 @@ function ServicePage() {
                 </div>
                 <div className="mt-3 space-y-3">
                   <div className="rounded-xl border bg-muted/30 p-3">
-                    <p className="text-xs font-medium text-foreground/75">
+                    <p className="text-sm font-semibold text-foreground">
                       Rad 1 · Bara intervall (varje)
+                    </p>
+                    <p className="mt-0.5 text-sm text-foreground/75">
+                      Räknar bara ett intervall, varje X månader eller km.
                     </p>
                     <div className="mt-2 flex flex-wrap gap-x-7 gap-y-2">
                       <NumField
@@ -548,8 +541,12 @@ function ServicePage() {
                     />
                   </div>
                   <div className="rounded-xl border bg-muted/30 p-3">
-                    <p className="text-xs font-medium text-foreground/75">
+                    <p className="text-sm font-semibold text-foreground">
                       Rad 2 · Första gången och därefter
+                    </p>
+                    <p className="mt-0.5 text-sm text-foreground/75">
+                      Räknar första gången och därefter. Fyller du bara i ett av fälten gäller det
+                      som intervall, så 48 betyder var 48:e månad.
                     </p>
                     <div className="mt-2 flex flex-wrap gap-x-7 gap-y-2">
                       <div className="grid grid-cols-2 gap-3">
