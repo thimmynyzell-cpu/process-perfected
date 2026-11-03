@@ -119,13 +119,13 @@ function NumField({
 }) {
   return (
     <div className="space-y-1">
-      <Label htmlFor={id} className="text-xs">
+      <Label htmlFor={id} className="text-[0.8rem] text-foreground">
         {label}
       </Label>
       <Input
         id={id}
         placeholder={placeholder}
-        className="h-8 max-w-32 rounded-full bg-muted/50 px-3 text-sm placeholder:text-muted-foreground/40 focus-visible:bg-background"
+        className="h-9 max-w-32 rounded-full border-[1.5px] border-foreground/25 bg-background px-3.5 text-sm font-medium placeholder:text-muted-foreground/60 hover:border-foreground/40"
         inputMode="numeric"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -335,7 +335,7 @@ function ServicePage() {
                     <Input
                       id="months"
                       placeholder="120"
-                      className="h-8 max-w-32 rounded-full bg-muted/50 px-3 text-sm placeholder:text-muted-foreground/40 focus-visible:bg-background"
+                      className="h-9 max-w-32 rounded-full border-[1.5px] border-foreground/25 bg-background px-3.5 text-sm font-medium placeholder:text-muted-foreground/60 hover:border-foreground/40"
                       inputMode="numeric"
                       autoFocus
                       value={months}
@@ -347,7 +347,7 @@ function ServicePage() {
                     <Input
                       id="year"
                       placeholder="10"
-                      className="h-8 max-w-32 rounded-full bg-muted/50 px-3 text-sm placeholder:text-muted-foreground/40 focus-visible:bg-background"
+                      className="h-9 max-w-32 rounded-full border-[1.5px] border-foreground/25 bg-background px-3.5 text-sm font-medium placeholder:text-muted-foreground/60 hover:border-foreground/40"
                       inputMode="decimal"
                       value={yearText}
                       onChange={(e) => changeYear(e.target.value)}
@@ -365,7 +365,7 @@ function ServicePage() {
                   <Input
                     id="km"
                     placeholder="90000"
-                    className="h-8 max-w-32 rounded-full bg-muted/50 px-3 text-sm placeholder:text-muted-foreground/40 focus-visible:bg-background"
+                    className="h-9 max-w-32 rounded-full border-[1.5px] border-foreground/25 bg-background px-3.5 text-sm font-medium placeholder:text-muted-foreground/60 hover:border-foreground/40"
                     inputMode="numeric"
                     value={km}
                     onChange={(e) => setKm(e.target.value)}
@@ -484,7 +484,7 @@ function ServicePage() {
             return (
               <div key={m.id} className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-primary">Eget intervall {i + 1}</h3>
+                  <h3 className="text-lg font-bold text-primary">Eget intervall {i + 1}</h3>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
@@ -509,7 +509,7 @@ function ServicePage() {
                 </div>
                 <div className="mt-3 space-y-3">
                   <div className="rounded-xl border bg-muted/30 p-3">
-                    <p className="text-sm font-semibold text-foreground">
+                    <p className="text-base font-semibold text-foreground">
                       Rad 1 · Bara intervall (varje)
                     </p>
                     <p className="mt-0.5 text-sm text-foreground/75">
@@ -541,7 +541,7 @@ function ServicePage() {
                     />
                   </div>
                   <div className="rounded-xl border bg-muted/30 p-3">
-                    <p className="text-sm font-semibold text-foreground">
+                    <p className="text-base font-semibold text-foreground">
                       Rad 2 · Första gången och därefter
                     </p>
                     <p className="mt-0.5 text-sm text-foreground/75">
