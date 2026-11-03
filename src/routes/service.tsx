@@ -381,7 +381,7 @@ function ServicePage() {
           </Button>
         </div>
 
-        {value !== null && kmValue !== null && (
+        {(months.trim() !== "" || yearText.trim() !== "" || km.trim() !== "") && (
           <p className="mt-4 rounded-md border border-l-4 border-amber-500 bg-amber-500/10 px-3 py-2 text-sm animate-in fade-in slide-in-from-top-1 duration-300 motion-reduce:animate-none">
             <strong>OBS!</strong> De vanliga intervallen räknar som längst var {MAX_AGE_EVERY}:e
             månad och var {fmt(MAX_KM_EVERY)} km. För intervall utöver varje {MAX_AGE_EVERY}:e månad
