@@ -50,6 +50,10 @@ function parse(text: string, dotThousands = true): number | null {
   return text.trim() !== "" && Number.isFinite(n) && n >= 0 ? n : null;
 }
 
+// Längsta intervallen som de vanliga listorna räknar med.
+const MAX_AGE_EVERY = Math.max(...EXTRA_SERVICES.map((e) => e.everyYears)) * 12;
+const MAX_KM_EVERY = Math.max(...KM_INTERVALS);
+
 type Row = { key: string; label: string; rule: Rule };
 
 const AGE_ROWS: Row[] = EXTRA_SERVICES.map((s) => ({
@@ -300,7 +304,13 @@ function ServicePage() {
           </Button>
         </div>
 
-        <div className="mt-6 grid items-start gap-6 sm:grid-cols-2">
+        <p className="mt-4 rounded-md border border-amber-500 bg-amber-500/10 p-3 text-sm">
+          <strong>OBS!</strong> De vanliga intervallen räknar som längst var {MAX_AGE_EVERY}:e månad
+          och var {fmt(MAX_KM_EVERY)} km. För intervall utöver varje {MAX_AGE_EVERY}:e månad eller
+          utöver varje {fmt(MAX_KM_EVERY)} km, räkna manuellt under Eget intervall.
+        </p>
+
+        <div className="mt-4 grid items-start gap-6 sm:grid-cols-2">
           <div>
             {year !== null && value !== null && (
               <div className="rounded-lg border p-4">
