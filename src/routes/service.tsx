@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { Check, Megaphone, Plus, Wrench, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, ClipboardPaste, Megaphone, PencilLine, Plus, Wrench, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -183,6 +183,14 @@ function ManualResultView({ result }: { result: ManualResult }) {
 
 // Listan ser ut som tilläggsservicen på bokningssidan, så att det är lätt att klicka i samma
 // rutor där. Därför har den egna färger och typsnitt i stället för sidans tema.
+// Fritextrutan är liten tills man klistrar in; då växer den med texten upp till en gräns.
+function growToFit(el: HTMLTextAreaElement, max = 480) {
+  el.style.height = "auto";
+  const full = el.scrollHeight + el.offsetHeight - el.clientHeight;
+  el.style.height = `${Math.min(full, max)}px`;
+  el.style.overflowY = full > max ? "auto" : "hidden";
+}
+
 function ServicePanel({ items }: { items: { s: ParsedService; e: ServiceEval }[] }) {
   return (
     <div
@@ -246,6 +254,12 @@ function ServicePage() {
   const [km, setKm] = useState("");
   const [manuals, setManuals] = useState<ManualText[]>([blankManual(1)]);
   const [serviceText, setServiceText] = useState("");
+  // Fritext är förvalt; bara det valda sättet att lägga in intervall visas.
+  const [mode, setMode] = useState<"text" | "manual">("text");
+  const serviceRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (serviceRef.current) growToFit(serviceRef.current);
+  }, [serviceText, mode]);
   const [nextId, setNextId] = useState(2);
 
   // Månader och år hänger ihop: ändrar man det ena uppdateras det andra.
@@ -457,7 +471,8 @@ function ServicePage() {
             <span>
               <strong>OBS!</strong> De vanliga intervallen räknar som längst var {MAX_AGE_EVERY}:e
               månad och var {fmt(MAX_KM_EVERY)} km. För intervall utöver varje {MAX_AGE_EVERY}:e
-              månad eller utöver varje {fmt(MAX_KM_EVERY)} km, räkna manuellt under Eget intervall.
+              månad eller utöver varje {fmt(MAX_KM_EVERY)} km, räkna manuellt eller klistra in dem
+              under Lägg in intervall.
             </span>
           </p>
         )}
@@ -543,199 +558,231 @@ function ServicePage() {
           </div>
         </div>
 
-        <section className="mt-6 space-y-3">
-          <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">
-            Eget intervall
-          </h2>
-          {manuals.map((m, i) => {
-            return (
-              <div key={m.id} className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-primary">Eget intervall {i + 1}</h3>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setManuals(manuals.map((x) => (x.id === m.id ? blankManual(m.id) : x)))
-                      }
-                      className="rounded px-2 py-1 text-sm text-foreground/75 hover:bg-accent"
-                    >
-                      Rensa
-                    </button>
-                    {manuals.length > 1 && (
-                      <button
-                        type="button"
-                        aria-label={`Ta bort eget intervall ${i + 1}`}
-                        onClick={() => setManuals(manuals.filter((x) => x.id !== m.id))}
-                        className="rounded p-1 text-foreground/75 hover:bg-accent"
-                      >
-                        <X className="size-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-3 space-y-3">
-                  <div className="rounded-xl border bg-muted/30 p-3">
-                    <p className="text-base font-semibold text-foreground">
-                      Rad 1 · Bara intervall (varje)
-                    </p>
-                    <p className="mt-0.5 text-sm text-foreground/75">
-                      Räknar bara ett intervall, varje X månader eller km.
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-x-7 gap-y-2">
-                      <NumField
-                        id={`sm${m.id}`}
-                        label="Varje (mån)"
-                        placeholder="12"
-                        value={m.simpleMonthEvery}
-                        onChange={(t) => changeManual(m.id, "simpleMonthEvery", t)}
-                      />
-                      <NumField
-                        id={`sk${m.id}`}
-                        label="Varje (km)"
-                        placeholder="15000"
-                        value={m.simpleKmEvery}
-                        onChange={(t) => changeManual(m.id, "simpleKmEvery", t)}
-                      />
-                    </div>
-                    <ManualResultView
-                      result={manualResult(
-                        null,
-                        parse(m.simpleMonthEvery),
-                        null,
-                        parse(m.simpleKmEvery),
-                      )}
-                    />
-                  </div>
-                  <div className="rounded-xl border bg-muted/30 p-3">
-                    <p className="text-base font-semibold text-foreground">
-                      Rad 2 · Första gången och därefter
-                    </p>
-                    <p className="mt-0.5 text-sm text-foreground/75">
-                      Räknar första gången och därefter. Fyller du bara i ett av fälten gäller det
-                      som intervall, så 48 betyder var 48:e månad.
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-x-7 gap-y-2">
-                      <div className="grid grid-cols-2 gap-3">
-                        <NumField
-                          id={`mf${m.id}`}
-                          label="Första gången (mån)"
-                          placeholder="120"
-                          value={m.monthFirst}
-                          onChange={(t) => changeManual(m.id, "monthFirst", t)}
-                        />
-                        <NumField
-                          id={`me${m.id}`}
-                          label="Därefter varje (mån)"
-                          placeholder="60"
-                          value={m.monthEvery}
-                          onChange={(t) => changeManual(m.id, "monthEvery", t)}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <NumField
-                          id={`kf${m.id}`}
-                          label="Första gången (km)"
-                          placeholder="35000"
-                          value={m.kmFirst}
-                          onChange={(t) => changeManual(m.id, "kmFirst", t)}
-                        />
-                        <NumField
-                          id={`ke${m.id}`}
-                          label="Därefter varje (km)"
-                          placeholder="120000"
-                          value={m.kmEvery}
-                          onChange={(t) => changeManual(m.id, "kmEvery", t)}
-                        />
-                      </div>
-                    </div>
-                    <ManualResultView
-                      result={manualResult(
-                        parse(m.monthFirst),
-                        parse(m.monthEvery),
-                        parse(m.kmFirst),
-                        parse(m.kmEvery),
-                      )}
-                    />
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={addManual}
-            className="rounded-full border-dashed border-primary text-primary hover:bg-primary/10"
-          >
-            <Plus className="size-4" /> Lägg till eget intervall
-          </Button>
-        </section>
-
         <section className="mt-8 space-y-3">
           <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">
-            Klistra in tilläggsservice
+            Lägg in intervall
           </h2>
-          <p className="text-sm text-foreground/75">
-            Klistra in tilläggsservicen från bokningssidan, en per rad. Sidan räknar ut vilka som
-            ska med utifrån ålder och mätarställning överst, med samma regler som eget intervall.
-            Tiden inom parentes, till exempel (0,10 t), räknas inte.
-          </p>
-          <div className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="serviceText" className="text-base font-semibold">
-                Fritext
-              </Label>
+          <div
+            role="group"
+            aria-label="Lägg in intervall som"
+            className="inline-flex gap-0.5 rounded-full bg-muted p-1"
+          >
+            {(
+              [
+                ["text", "Fritext", ClipboardPaste],
+                ["manual", "Manuellt", PencilLine],
+              ] as const
+            ).map(([value, label, Icon]) => (
               <button
+                key={value}
                 type="button"
-                onClick={() => setServiceText("")}
-                className="rounded px-2 py-1 text-sm text-foreground/75 hover:bg-accent"
+                aria-pressed={mode === value}
+                onClick={() => setMode(value)}
+                className={
+                  mode === value
+                    ? "inline-flex items-center gap-1.5 rounded-full bg-background px-4 py-1.5 text-sm font-semibold text-primary shadow-sm"
+                    : "inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium text-foreground/70 hover:text-foreground"
+                }
               >
-                Rensa
+                <Icon className="size-4" /> {label}
               </button>
-            </div>
-            <Textarea
-              id="serviceText"
-              rows={6}
-              value={serviceText}
-              onChange={(e) => setServiceText(e.target.value)}
-              placeholder={
-                "Var 30000:e km oberoende av månader (0,10 t)\nVid 105000 km eller 72 månader och sedan var 15000:e km eller 12:e månad (0,10 t)"
-              }
-              className="mt-2 rounded-xl border-[1.5px] border-foreground/25 bg-background text-sm placeholder:text-muted-foreground/60"
-            />
+            ))}
           </div>
-          {services.length > 0 && (
-            <>
-              {services.some(({ s, e }) => e.include === null && (s.months || s.km)) && (
-                <p className="text-sm font-medium text-amber-700">
-                  Fyll i ålder och mätarställning överst så räknas listan ut.
-                </p>
-              )}
-              <ServicePanel items={services} />
-              <details className="rounded-2xl border bg-card shadow-sm">
-                <summary className="cursor-pointer px-4 py-3 font-semibold">
-                  Visa uträkning ({services.filter(({ e }) => e.include).length} av{" "}
-                  {services.length} ska med
-                  {services.some(({ e }) => e.include === null)
-                    ? `, ${services.filter(({ e }) => e.include === null).length} går inte att avgöra`
-                    : ""}
-                  )
-                </summary>
-                <div className="space-y-3 border-t px-4 py-3 text-sm">
-                  {services.map(({ s, e }, i) => (
-                    <div key={i} className="space-y-0.5">
-                      <p className="font-semibold">{s.text}</p>
-                      {describeService(s, e, ctx).map((l) => (
-                        <p key={l} className="text-foreground/80">
-                          {l}
-                        </p>
+          {mode === "text" ? (
+            <div className="space-y-3">
+              <p className="text-sm text-foreground/75">
+                Klistra in tilläggsservicen från bokningssidan, en per rad. Sidan räknar ut vilka
+                som ska med utifrån ålder och mätarställning överst, med samma regler som Manuellt.
+                Tiden inom parentes, till exempel (0,10 t), räknas inte.
+              </p>
+              <div className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="serviceText" className="text-base font-semibold">
+                    Klistra in här
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={() => setServiceText("")}
+                    className="rounded px-2 py-1 text-sm text-foreground/75 hover:bg-accent"
+                  >
+                    Rensa
+                  </button>
+                </div>
+                <Textarea
+                  ref={serviceRef}
+                  id="serviceText"
+                  rows={2}
+                  value={serviceText}
+                  onChange={(e) => setServiceText(e.target.value)}
+                  placeholder={
+                    "Var 30000:e km oberoende av månader (0,10 t)\nVid 105000 km eller 72 månader och sedan var 15000:e km eller 12:e månad (0,10 t)"
+                  }
+                  className="mt-2 min-h-0 resize-none overflow-hidden rounded-xl border-[1.5px] border-foreground/25 bg-background text-sm placeholder:text-muted-foreground/60"
+                />
+              </div>
+              {services.length > 0 && (
+                <>
+                  {services.some(({ s, e }) => e.include === null && (s.months || s.km)) && (
+                    <p className="text-sm font-medium text-amber-700">
+                      Fyll i ålder och mätarställning överst så räknas listan ut.
+                    </p>
+                  )}
+                  <ServicePanel items={services} />
+                  <details className="rounded-2xl border bg-card shadow-sm">
+                    <summary className="cursor-pointer px-4 py-3 font-semibold">
+                      Visa uträkning ({services.filter(({ e }) => e.include).length} av{" "}
+                      {services.length} ska med
+                      {services.some(({ e }) => e.include === null)
+                        ? `, ${services.filter(({ e }) => e.include === null).length} går inte att avgöra`
+                        : ""}
+                      )
+                    </summary>
+                    <div className="space-y-3 border-t px-4 py-3 text-sm">
+                      {services.map(({ s, e }, i) => (
+                        <div key={i} className="space-y-0.5">
+                          <p className="font-semibold">{s.text}</p>
+                          {describeService(s, e, ctx).map((l) => (
+                            <p key={l} className="text-foreground/80">
+                              {l}
+                            </p>
+                          ))}
+                        </div>
                       ))}
                     </div>
-                  ))}
-                </div>
-              </details>
-            </>
+                  </details>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-foreground/75">
+                Har intervallet både månader och km visas vilket som genomförts flest gånger, och
+                det är det du ska gå på.
+              </p>
+              {manuals.map((m, i) => {
+                return (
+                  <div key={m.id} className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-bold text-primary">Eget intervall {i + 1}</h3>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setManuals(manuals.map((x) => (x.id === m.id ? blankManual(m.id) : x)))
+                          }
+                          className="rounded px-2 py-1 text-sm text-foreground/75 hover:bg-accent"
+                        >
+                          Rensa
+                        </button>
+                        {manuals.length > 1 && (
+                          <button
+                            type="button"
+                            aria-label={`Ta bort eget intervall ${i + 1}`}
+                            onClick={() => setManuals(manuals.filter((x) => x.id !== m.id))}
+                            className="rounded p-1 text-foreground/75 hover:bg-accent"
+                          >
+                            <X className="size-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-3 space-y-3">
+                      <div className="rounded-xl border bg-muted/30 p-3">
+                        <p className="text-base font-semibold text-foreground">
+                          Rad 1 · Bara intervall (varje)
+                        </p>
+                        <p className="mt-0.5 text-sm text-foreground/75">
+                          Räknar bara ett intervall, varje X månader eller km.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-x-7 gap-y-2">
+                          <NumField
+                            id={`sm${m.id}`}
+                            label="Varje (mån)"
+                            placeholder="12"
+                            value={m.simpleMonthEvery}
+                            onChange={(t) => changeManual(m.id, "simpleMonthEvery", t)}
+                          />
+                          <NumField
+                            id={`sk${m.id}`}
+                            label="Varje (km)"
+                            placeholder="15000"
+                            value={m.simpleKmEvery}
+                            onChange={(t) => changeManual(m.id, "simpleKmEvery", t)}
+                          />
+                        </div>
+                        <ManualResultView
+                          result={manualResult(
+                            null,
+                            parse(m.simpleMonthEvery),
+                            null,
+                            parse(m.simpleKmEvery),
+                          )}
+                        />
+                      </div>
+                      <div className="rounded-xl border bg-muted/30 p-3">
+                        <p className="text-base font-semibold text-foreground">
+                          Rad 2 · Första gången och därefter
+                        </p>
+                        <p className="mt-0.5 text-sm text-foreground/75">
+                          Räknar första gången och därefter. Fyller du bara i ett av fälten gäller
+                          det som intervall, så 48 betyder var 48:e månad.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-x-7 gap-y-2">
+                          <div className="grid grid-cols-2 gap-3">
+                            <NumField
+                              id={`mf${m.id}`}
+                              label="Första gången (mån)"
+                              placeholder="120"
+                              value={m.monthFirst}
+                              onChange={(t) => changeManual(m.id, "monthFirst", t)}
+                            />
+                            <NumField
+                              id={`me${m.id}`}
+                              label="Därefter varje (mån)"
+                              placeholder="60"
+                              value={m.monthEvery}
+                              onChange={(t) => changeManual(m.id, "monthEvery", t)}
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <NumField
+                              id={`kf${m.id}`}
+                              label="Första gången (km)"
+                              placeholder="35000"
+                              value={m.kmFirst}
+                              onChange={(t) => changeManual(m.id, "kmFirst", t)}
+                            />
+                            <NumField
+                              id={`ke${m.id}`}
+                              label="Därefter varje (km)"
+                              placeholder="120000"
+                              value={m.kmEvery}
+                              onChange={(t) => changeManual(m.id, "kmEvery", t)}
+                            />
+                          </div>
+                        </div>
+                        <ManualResultView
+                          result={manualResult(
+                            parse(m.monthFirst),
+                            parse(m.monthEvery),
+                            parse(m.kmFirst),
+                            parse(m.kmEvery),
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addManual}
+                className="rounded-full border-dashed border-primary text-primary hover:bg-primary/10"
+              >
+                <Plus className="size-4" /> Lägg till eget intervall
+              </Button>
+            </div>
           )}
         </section>
       </main>
