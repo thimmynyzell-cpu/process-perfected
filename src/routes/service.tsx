@@ -526,7 +526,7 @@ function ServicePage() {
                     <Label htmlFor="months">Antal månader</Label>
                     <Input
                       id="months"
-                      placeholder="120"
+                      placeholder="t.ex. 120"
                       className="h-9 max-w-32 rounded-full border-[1.5px] border-foreground/25 bg-background px-3.5 text-sm font-medium placeholder:text-muted-foreground/60 hover:border-foreground/40"
                       inputMode="numeric"
                       autoFocus
@@ -538,7 +538,7 @@ function ServicePage() {
                     <Label htmlFor="year">eller år</Label>
                     <Input
                       id="year"
-                      placeholder="10"
+                      placeholder="t.ex. 10"
                       className="h-9 max-w-32 rounded-full border-[1.5px] border-foreground/25 bg-background px-3.5 text-sm font-medium placeholder:text-muted-foreground/60 hover:border-foreground/40"
                       inputMode="decimal"
                       value={yearText}
@@ -557,7 +557,7 @@ function ServicePage() {
                   <div className="relative max-w-32">
                     <Input
                       id="km"
-                      placeholder="90 000"
+                      placeholder="t.ex. 90 000"
                       className="h-9 rounded-full border-[1.5px] border-foreground/25 bg-background px-3.5 text-sm font-medium tabular-nums placeholder:text-muted-foreground/60 hover:border-foreground/40"
                       inputMode="numeric"
                       autoComplete="off"
@@ -753,7 +753,7 @@ function ServicePage() {
                   value={serviceText}
                   onChange={(e) => setServiceText(e.target.value)}
                   placeholder={
-                    "Var 30000:e km oberoende av månader (0,10 t)\nVid 105000 km eller 72 månader och sedan var 15000:e km eller 12:e månad (0,10 t)"
+                    "t.ex. Var 30000:e km oberoende av månader (0,10 t)\nVid 105000 km eller 72 månader och sedan var 15000:e km eller 12:e månad (0,10 t)"
                   }
                   className="mt-2 min-h-0 resize-none overflow-hidden rounded-xl border-[1.5px] border-foreground/25 bg-background text-sm placeholder:text-muted-foreground/60"
                 />
@@ -812,7 +812,7 @@ function ServicePage() {
                 </div>
                 <Input
                   id="mbQuery"
-                  placeholder="A1"
+                  placeholder="t.ex. A1"
                   autoComplete="off"
                   autoCapitalize="characters"
                   spellCheck={false}
@@ -896,7 +896,7 @@ function ServicePage() {
                           <NumField
                             id={`sm${m.id}`}
                             label="Varje (mån)"
-                            placeholder="12"
+                            placeholder="t.ex. 12"
                             value={m.simpleMonthEvery}
                             onChange={(t) => changeManual(m.id, "simpleMonthEvery", t)}
                           />
@@ -904,7 +904,7 @@ function ServicePage() {
                             id={`sk${m.id}`}
                             label="Varje (km)"
                             km
-                            placeholder="15 000"
+                            placeholder="t.ex. 15 000"
                             value={m.simpleKmEvery}
                             onChange={(t) => changeManual(m.id, "simpleKmEvery", t)}
                           />
@@ -931,14 +931,14 @@ function ServicePage() {
                             <NumField
                               id={`mf${m.id}`}
                               label="Första gången (mån)"
-                              placeholder="120"
+                              placeholder="t.ex. 120"
                               value={m.monthFirst}
                               onChange={(t) => changeManual(m.id, "monthFirst", t)}
                             />
                             <NumField
                               id={`me${m.id}`}
                               label="Därefter varje (mån)"
-                              placeholder="60"
+                              placeholder="t.ex. 60"
                               value={m.monthEvery}
                               onChange={(t) => changeManual(m.id, "monthEvery", t)}
                             />
@@ -948,7 +948,7 @@ function ServicePage() {
                               id={`kf${m.id}`}
                               label="Första gången (km)"
                               km
-                              placeholder="35 000"
+                              placeholder="t.ex. 35 000"
                               value={m.kmFirst}
                               onChange={(t) => changeManual(m.id, "kmFirst", t)}
                             />
@@ -956,7 +956,7 @@ function ServicePage() {
                               id={`ke${m.id}`}
                               label="Därefter varje (km)"
                               km
-                              placeholder="120 000"
+                              placeholder="t.ex. 120 000"
                               value={m.kmEvery}
                               onChange={(t) => changeManual(m.id, "kmEvery", t)}
                             />
