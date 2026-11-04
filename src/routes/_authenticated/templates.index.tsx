@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Archive, Copy, Folder, FolderOpen, FolderPlus, Inbox, ListChecks, Pencil, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { Archive, BookOpen, Copy, Folder, FolderOpen, FolderPlus, Inbox, ListChecks, Pencil, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useT } from "@/i18n";
@@ -10,6 +10,7 @@ import { PLANS } from "@/lib/plans";
 import { cn } from "@/lib/utils";
 import { concatItems, folderOf, pickItems } from "@/lib/items";
 import { currentVersionId } from "@/lib/versions";
+import { LIBRARY, libraryRows, type LibraryTemplate } from "@/lib/library";
 import { Checkbox } from "@/components/ui/checkbox";
 import { OrgPage, Spinner, EmptyState, type OrgContext } from "@/components/OrgPage";
 import { PageHeader } from "@/components/AppShell";
@@ -44,6 +45,8 @@ function Templates({ ctx }: { ctx: OrgContext }) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<"active" | "archived" | "trash">("active");
   const [open, setOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [adding, setAdding] = useState<string | null>(null);
   const [form, setForm] = useState({ title: "", description: "", category: "" });
   // Base checklist questions to include in the new checklist.
   const [baseKeep, setBaseKeep] = useState<Set<string>>(new Set());
@@ -212,6 +215,45 @@ function Templates({ ctx }: { ctx: OrgContext }) {
     qc.invalidateQueries({ queryKey: ["templates", ctx.orgId] });
   }
 
+  /** Adds a built-in checklist from the library to this organization. */
+  async function addFromLibrary(lib: LibraryTemplate) {
+    if (atLimit) { toast.error(t("limit.templates", { max: max ?? 0 })); return; }
+    setAdding(lib.key);
+    try {
+      const { data: tpl, error } = await supabase
+        .from("templates")
+        .insert({
+          org_id: ctx.orgId,
+          title: lib.title,
+          description: lib.description,
+          category: lib.category,
+          created_by: ctx.userId,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      const { data: ver, error: e2 } = await supabase
+        .from("template_versions")
+        .insert({ template_id: tpl.id, org_id: ctx.orgId, version: 1, created_by: ctx.userId })
+        .select()
+        .single();
+      if (e2) throw e2;
+      const { error: e3 } = await supabase
+        .from("template_items")
+        .insert(libraryRows(lib).map((r) => ({ ...r, version_id: ver.id, org_id: ctx.orgId })));
+      if (e3) throw e3;
+      await logAudit(ctx.orgId, ctx.userId, "template.created", "template", tpl.id, { title: tpl.title, library: lib.key });
+      toast.success(t("templates.libraryAdded", { title: lib.title }));
+      setLibraryOpen(false);
+      qc.invalidateQueries({ queryKey: ["templates", ctx.orgId] });
+      navigate({ to: "/templates/$templateId", params: { templateId: tpl.id } });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAdding(null);
+    }
+  }
+
   // Checklist being dragged onto a folder in the sidebar.
   const [dragTpl, setDragTpl] = useState<string | null>(null);
   const [overFolder, setOverFolder] = useState<string | null>(null);
@@ -279,9 +321,14 @@ function Templates({ ctx }: { ctx: OrgContext }) {
         title={t("templates.title")}
         action={
           manage ? (
-            <Button onClick={() => (atLimit ? toast.error(t("limit.templates", { max: max ?? 0 })) : openCreate())}>
-              <Plus className="size-4" /> {t("templates.new")}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setLibraryOpen(true)}>
+                <BookOpen className="size-4" /> {t("templates.library")}
+              </Button>
+              <Button onClick={() => (atLimit ? toast.error(t("limit.templates", { max: max ?? 0 })) : openCreate())}>
+                <Plus className="size-4" /> {t("templates.new")}
+              </Button>
+            </div>
           ) : null
         }
       />
@@ -639,6 +686,36 @@ function Templates({ ctx }: { ctx: OrgContext }) {
               <Button type="submit">{t("common.create")}</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={libraryOpen} onOpenChange={setLibraryOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("templates.library")}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{t("templates.libraryHint")}</p>
+          <div className="space-y-3">
+            {LIBRARY.map((lib) => {
+              const exists = all.some((x) => x.title === lib.title && !x.delete_after);
+              return (
+                <div key={lib.key} className="rounded-xl border p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-medium">{lib.title}</div>
+                      <div className="mt-1 text-sm text-muted-foreground">{lib.description}</div>
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {t("templates.libraryMeta", { folder: lib.category, count: lib.items.length })}
+                      </div>
+                    </div>
+                    <Button size="sm" disabled={adding !== null} onClick={() => addFromLibrary(lib)}>
+                      {adding === lib.key ? t("common.loading") : exists ? t("templates.libraryAddAgain") : t("templates.libraryAdd")}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </DialogContent>
       </Dialog>
     </>
