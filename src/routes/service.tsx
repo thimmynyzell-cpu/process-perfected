@@ -596,7 +596,7 @@ function ServicePage() {
               <div className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="serviceText" className="text-base font-semibold">
-                    Klistra in här
+                    Kopiera och klistra in tilläggsservicarna
                   </Label>
                   <button
                     type="button"
