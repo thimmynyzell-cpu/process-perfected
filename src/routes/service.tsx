@@ -472,7 +472,7 @@ function ServicePage() {
               <strong>OBS!</strong> De vanliga intervallen räknar som längst var {MAX_AGE_EVERY}:e
               månad och var {fmt(MAX_KM_EVERY)} km. För intervall utöver varje {MAX_AGE_EVERY}:e
               månad eller utöver varje {fmt(MAX_KM_EVERY)} km, räkna manuellt eller klistra in dem
-              under Lägg in intervall.
+              under Serviceintervall.
             </span>
           </p>
         )}
@@ -560,11 +560,11 @@ function ServicePage() {
 
         <section className="mt-10 space-y-4">
           <h2 className="text-center text-2xl font-bold tracking-tight text-primary">
-            Lägg in intervall
+            Serviceintervall
           </h2>
           <div
             role="group"
-            aria-label="Lägg in intervall som"
+            aria-label="Lägg in serviceintervall som"
             className="mx-auto flex w-fit gap-1 rounded-full bg-muted p-1.5"
           >
             {(
@@ -593,7 +593,6 @@ function ServicePage() {
               <p className="mx-auto max-w-prose text-center text-sm text-foreground/75">
                 Klistra in tilläggsservicen från bokningssidan, en per rad. Sidan räknar ut vilka
                 som ska med utifrån ålder och mätarställning överst, med samma regler som Manuellt.
-                Tiden inom parentes, till exempel (0,10 t), räknas inte.
               </p>
               <div className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
                 <div className="flex items-center justify-between">
