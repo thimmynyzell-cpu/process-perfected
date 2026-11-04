@@ -320,6 +320,12 @@ describe("parseServiceText", () => {
       months: null,
       km: { first: 30_000, every: 60_000 },
     });
+    expect(
+      one("Vid 36 månader oberoende av km och sedan var 120000:e km eller var 24:e månad (0,20 t)"),
+    ).toEqual({
+      months: { first: 36, every: 24 },
+      km: { first: 120_000, every: 120_000 },
+    });
     expect(one("Var 1500:e mil")).toEqual({ months: null, km: { first: 15_000, every: 15_000 } });
   });
 

@@ -293,19 +293,15 @@ function parseServiceLine(line: string): Omit<ParsedService, "text"> {
     const mode = q.mode ?? (then ? "first" : "every");
     parts[q.kind] = { first: q.value, every: mode === "every" ? q.value : null };
   }
-  let mixed = false;
   for (const q of quantities(tail)) {
     const p = parts[q.kind];
     if (p) p.every = q.value;
-    else mixed = true;
+    // Bara efter "sedan", t.ex. "vid 36 månader … och sedan var 120000:e km": mätarställningen
+    // vid första gången är okänd, så den delen räknas som var 120 000:e km från noll.
+    else parts[q.kind] = { first: q.value, every: q.value };
   }
 
-  const warning =
-    !parts.months && !parts.km
-      ? "Kunde inte tolkas – kontrollera manuellt."
-      : mixed
-        ? "Kunde inte tolka allt på raden – kontrollera manuellt."
-        : null;
+  const warning = !parts.months && !parts.km ? "Kunde inte tolkas – kontrollera manuellt." : null;
   return { ...parts, warning };
 }
 

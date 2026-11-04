@@ -220,7 +220,7 @@ function growToFit(el: HTMLTextAreaElement, max = 480) {
 function ServicePanel({ items }: { items: { s: ParsedService; e: ServiceEval }[] }) {
   return (
     <div
-      className="max-w-[340px] rounded-[4px] border border-[#e3e3e3] bg-white px-6 pb-6 pt-5 text-[#1b1b1b] shadow-sm"
+      className="rounded-[4px] border border-[#e3e3e3] bg-white px-6 pb-6 pt-5 text-[#1b1b1b] shadow-sm"
       style={{ fontFamily: "Roboto, Arial, sans-serif" }}
     >
       <h3
@@ -229,42 +229,50 @@ function ServicePanel({ items }: { items: { s: ParsedService; e: ServiceEval }[]
       >
         TILLÄGGSSERVICE
       </h3>
-      <p className="mb-5 font-bold text-[#111]">Välj eventuell tilläggsservice</p>
+      <div className="mb-5 grid gap-x-10 sm:grid-cols-[260px_1fr]">
+        <p className="font-bold text-[#111]">Välj eventuell tilläggsservice</p>
+        <p className="hidden pt-0.5 text-xs font-bold uppercase tracking-[0.12em] text-[#555] sm:block">
+          Varför
+        </p>
+      </div>
       <ul className="space-y-[18px] pl-1">
         {items.map(({ s, e }, i) => {
           const time = /^(.*?)\s*(\([^)]*\))\s*$/.exec(s.text);
           return (
-            <li key={i} className="flex items-start gap-2.5 text-[15px] leading-tight">
-              {e.include ? (
-                <span
-                  role="img"
-                  aria-label="Ska med"
-                  className="mt-0.5 grid size-[15px] shrink-0 place-items-center rounded-[1px] bg-[#ffe500] outline outline-1 outline-[#b8a400]"
-                >
-                  <Check className="size-3 text-black" strokeWidth={3.5} />
-                </span>
-              ) : (
-                <span
-                  role="img"
-                  aria-label={e.include === null ? "Går inte att avgöra" : "Ska inte med"}
-                  className="mt-0.5 size-[15px] shrink-0 rounded-[1px] bg-[#7b7b7b]"
-                />
-              )}
-              <span className="max-w-[230px]">
-                {time ? time[1] : s.text}
-                {time && (
-                  <>
-                    <br />
-                    {"\u00a0"}
-                    {time[2]}
-                  </>
-                )}
-                {!s.months && !s.km && (
-                  <span className="mt-1 block text-xs text-[#b25b00]">
-                    Kunde inte tolkas – kontrollera manuellt
+            <li key={i} className="grid gap-x-10 gap-y-2 sm:grid-cols-[256px_1fr]">
+              <div className="flex items-start gap-2.5 text-[15px] leading-tight">
+                {e.include ? (
+                  <span
+                    role="img"
+                    aria-label="Ska med"
+                    className="mt-0.5 grid size-[15px] shrink-0 place-items-center rounded-[1px] bg-[#ffe500] outline outline-1 outline-[#b8a400]"
+                  >
+                    <Check className="size-3 text-black" strokeWidth={3.5} />
                   </span>
+                ) : (
+                  <span
+                    role="img"
+                    aria-label={e.include === null ? "Går inte att avgöra" : "Ska inte med"}
+                    className="mt-0.5 size-[15px] shrink-0 rounded-[1px] bg-[#7b7b7b]"
+                  />
                 )}
-              </span>
+                <span className="max-w-[230px]">
+                  {time ? time[1] : s.text}
+                  {time && (
+                    <>
+                      <br />
+                      {"\u00a0"}
+                      {time[2]}
+                    </>
+                  )}
+                  {!s.months && !s.km && (
+                    <span className="mt-1 block text-xs text-[#b25b00]">
+                      Kunde inte tolkas – kontrollera manuellt
+                    </span>
+                  )}
+                </span>
+              </div>
+              <Why e={e} />
             </li>
           );
         })}
@@ -355,63 +363,30 @@ function MercedesResults({ query, onPick }: { query: string; onPick: (s: string)
   );
 }
 
-// Kort förklaring bredvid listan: bock eller kryss för km och år per rad, och vid båda
-// vilket som gäller.
-function ServiceWhy({ items }: { items: { s: ParsedService; e: ServiceEval }[] }) {
+// Förklaringen till höger om varje rad: km och år med bock eller kryss, och vid båda
+// vilket som gäller. Står i samma rad som servicen så att de hör ihop.
+function Why({ e }: { e: ServiceEval }) {
+  const { parts, choice } = summarizeService(e);
   return (
-    <div className="min-w-[240px] flex-1 rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
-      <p className="text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">Varför</p>
-      <ol className="mt-2 space-y-2.5">
-        {items.map(({ s, e }, i) => {
-          const { parts, choice } = summarizeService(e);
-          const title = s.text.replace(/\s*\([^)]*\)\s*$/, "");
-          return (
-            <li key={i} className="flex gap-2.5 text-sm">
-              <span
-                className={
-                  e.include
-                    ? "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
-                    : "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-muted text-xs font-bold text-foreground/70"
-                }
-                aria-label={
-                  e.include
-                    ? "Ska med"
-                    : e.include === null
-                      ? "Går inte att avgöra"
-                      : "Ska inte med"
-                }
-              >
-                {e.include ? "✓" : e.include === null ? "?" : "✗"}
-              </span>
-              <div className="min-w-0 space-y-1">
-                <p className="truncate font-medium" title={title}>
-                  {title}
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {parts.length === 0 && (
-                    <span className="text-xs text-amber-700">Kunde inte tolkas</span>
-                  )}
-                  {parts.map((p) => (
-                    <span
-                      key={p.kind}
-                      className={
-                        p.hit
-                          ? "rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary"
-                          : "rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground/70"
-                      }
-                    >
-                      {p.kind === "km" ? "Km" : "År"} {p.hit ? "✓" : p.hit === null ? "?" : "✗"}
-                      {p.detail ? ` ${p.detail}` : ""}
-                      {p.hit === null ? ` fyll i ${p.kind === "km" ? "km" : "ålder"}` : ""}
-                    </span>
-                  ))}
-                </div>
-                {choice && <p className="text-xs font-medium text-foreground/80">{choice}</p>}
-              </div>
-            </li>
-          );
-        })}
-      </ol>
+    <div className="space-y-1 border-l-2 border-[#e6e6e6] pl-3 font-sans sm:pl-4">
+      <div className="flex flex-wrap gap-1.5">
+        {parts.length === 0 && <span className="text-xs text-amber-700">Kunde inte tolkas</span>}
+        {parts.map((p) => (
+          <span
+            key={p.kind}
+            className={
+              p.hit
+                ? "rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary"
+                : "rounded-full bg-[#efefef] px-2 py-0.5 text-xs font-medium text-[#555]"
+            }
+          >
+            {p.kind === "km" ? "Km" : "År"} {p.hit ? "✓" : p.hit === null ? "?" : "✗"}
+            {p.detail ? ` ${p.detail}` : ""}
+            {p.hit === null ? ` fyll i ${p.kind === "km" ? "km" : "ålder"}` : ""}
+          </span>
+        ))}
+      </div>
+      {choice && <p className="text-xs font-medium text-[#444]">{choice}</p>}
     </div>
   );
 }
@@ -808,10 +783,7 @@ function ServicePage() {
                       Fyll i ålder och mätarställning överst så räknas listan ut.
                     </p>
                   )}
-                  <div className="flex flex-wrap items-start gap-4">
-                    <ServicePanel items={services} />
-                    <ServiceWhy items={services} />
-                  </div>
+                  <ServicePanel items={services} />
                   <details className="rounded-2xl border bg-card shadow-sm">
                     <summary className="cursor-pointer px-4 py-3 font-semibold">
                       Visa uträkning ({services.filter(({ e }) => e.include).length} av{" "}
