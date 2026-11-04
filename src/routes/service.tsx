@@ -616,14 +616,11 @@ function ServicePage() {
           </p>
         )}
 
-        <div className="mt-4 grid items-start gap-6 sm:grid-cols-2">
-          <div>
-            {year !== null && value !== null && (
-              <div className="space-y-2">
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">
-                  Tilläggsservicar
-                </p>
-                <div className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
+        {(value !== null || kmValue !== null) && (
+          <div className="mt-4 grid gap-x-6 gap-y-3 rounded-2xl border bg-card px-4 py-3.5 shadow-sm sm:grid-cols-2">
+            <div>
+              {value !== null && year !== null ? (
+                <>
                   <p className="text-sm text-foreground/75">
                     {value} månader
                     {value >= 12 && (
@@ -659,45 +656,29 @@ function ServicePage() {
                       </div>
                     </div>
                   )}
-                  <p className="mt-3 text-sm text-foreground/75">
-                    Tilläggsservicar för{" "}
-                    <span className="font-semibold text-foreground">
-                      år {year} ({year * 12})
-                    </span>
-                  </p>
-                  {matching(AGE_ROWS).length === 0 && (
-                    <p className="mt-2 font-medium">Inga tilläggsservicar detta år.</p>
-                  )}
-                  {renderRows(AGE_ROWS)}
-                </div>
-              </div>
-            )}
-          </div>
-          <div>
-            {kmValue !== null && (
-              <div className="space-y-2">
-                <p className="text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">
-                  Kilometerintervall
+                </>
+              ) : (
+                <p className="text-sm text-foreground/60">Fyll i ålder överst.</p>
+              )}
+            </div>
+            <div className="sm:border-l sm:pl-6">
+              {kmValue !== null ? (
+                <p className="text-sm text-foreground/75">
+                  Intervall mellan{" "}
+                  <span className="font-semibold text-foreground">
+                    {fmt(Math.max(0, kmValue - 10_000))}
+                  </span>{" "}
+                  och <span className="font-semibold text-foreground">{fmt(kmValue + 10_000)}</span>{" "}
+                  km
                 </p>
-                <div className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
-                  <p className="text-sm text-foreground/75">
-                    Intervall mellan {fmt(Math.max(0, kmValue - 10_000))} och{" "}
-                    {fmt(kmValue + 10_000)} km
-                  </p>
-                  <p className="mt-2 text-sm font-bold">
-                    Endast intervall på 10 000 km tas med (10 000, 20 000, 30 000 …).
-                  </p>
-                  {matching(KM_ROWS).length === 0 && (
-                    <p className="mt-2 font-medium">Inga körsträcksintervall träffar.</p>
-                  )}
-                  {renderRows(KM_ROWS)}
-                </div>
-              </div>
-            )}
+              ) : (
+                <p className="text-sm text-foreground/60">Fyll i mätarställning överst.</p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        <section className="mt-10 space-y-4">
+        <section className="mt-8 space-y-4">
           <h2 className="text-center text-2xl font-bold tracking-tight text-primary">
             Serviceintervall
           </h2>
@@ -853,6 +834,42 @@ function ServicePage() {
             </div>
           ) : (
             <div className="space-y-3">
+              {(year !== null || kmValue !== null) && (
+                <div className="grid items-start gap-4 sm:grid-cols-2">
+                  {year !== null && (
+                    <div className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
+                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">
+                        Tilläggsservicar
+                      </p>
+                      <p className="mt-2 text-sm text-foreground/75">
+                        Tilläggsservicar för{" "}
+                        <span className="font-semibold text-foreground">
+                          år {year} ({year * 12})
+                        </span>
+                      </p>
+                      {matching(AGE_ROWS).length === 0 && (
+                        <p className="mt-2 font-medium">Inga tilläggsservicar detta år.</p>
+                      )}
+                      {renderRows(AGE_ROWS)}
+                    </div>
+                  )}
+                  {kmValue !== null && (
+                    <div className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
+                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">
+                        Kilometerintervall
+                      </p>
+                      <p className="mt-2 text-sm font-bold">
+                        Endast intervall på 10 000 km tas med (10 000, 20 000, 30 000 …).
+                      </p>
+                      {matching(KM_ROWS).length === 0 && (
+                        <p className="mt-2 font-medium">Inga körsträcksintervall träffar.</p>
+                      )}
+                      {renderRows(KM_ROWS)}
+                    </div>
+                  )}
+                </div>
+              )}
+              <h3 className="pt-2 text-center text-lg font-bold text-primary">Eget intervall</h3>
               <p className="mx-auto max-w-prose text-center text-sm text-foreground/75">
                 Har intervallet både månader och km visas vilket som genomförts flest gånger, och
                 det är det du ska gå på.
