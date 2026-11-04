@@ -210,3 +210,245 @@ export function formatAge(months: number): string {
     rest === 0 ? null : `${String(rest).replace(".", ",")} ${rest === 1 ? "månad" : "månader"}`;
   return [y, m].filter(Boolean).join(" och ") || "0 månader";
 }
+
+// ---- Tilläggsservice i fritext ----
+// Rader som kopierats från bokningssidan, t.ex. "Vid 105000 km eller 72 månader och sedan
+// var 15000:e km eller 12:e månad (0,10 t)". Tiden inom parentes visas men räknas inte.
+
+export type Interval = { first: number; every: number | null };
+
+export type ParsedService = {
+  // Raden som den visas, utan punkt eller stjärna först.
+  text: string;
+  months: Interval | null;
+  km: Interval | null;
+  // Satt när raden inte gick att tolka helt.
+  warning: string | null;
+};
+
+const WORD_ORDINALS: Record<string, number> = {
+  annat: 2,
+  andra: 2,
+  tredje: 3,
+  fjärde: 4,
+  femte: 5,
+  sjätte: 6,
+};
+
+// Ett tal med enhet, t.ex. "15000:e km", "12:e månad", "72 månader", "2:a år", "1500 mil".
+const QUANTITY =
+  /(\d+(?:[.,]\d+)?)\s*(?::\s*[a-zåäö]+|[ae](?![a-zåäö]))?\s*(kilometer|km|mil|månader|månad|mån|år)(?![a-zåäö])/g;
+const EVERY_WORD = /(^|[^a-zåäö])(var|varje|vart)(?![a-zåäö])/;
+const FIRST_WORD = /(^|[^a-zåäö])(vid|efter|första|först|från)(?![a-zåäö])/;
+const WORD_INTERVAL =
+  /vart\s*(?:annat|andra|tredje|fjärde|femte|sjätte)\s+år|varannan\s+månad|(?:varje|vart)\s+år|årligen/i;
+const THEN_WORD = /(^|[^a-zåäö])(?:och\s+)?(?:sedan|därefter|därpå)(?![a-zåäö])/;
+
+type Quantity = { kind: "months" | "km"; value: number; mode: "every" | "first" | null };
+
+function quantities(text: string): Quantity[] {
+  const out: Quantity[] = [];
+  let last = 0;
+  let mode: Quantity["mode"] = null;
+  for (const m of text.matchAll(QUANTITY)) {
+    // Orden före talet avgör om det är ett intervall ("var") eller första gången ("vid").
+    // Utan sådant ord gäller samma som för talet före, t.ex. "vid 105000 km eller 72 mån".
+    const before = text.slice(last, m.index);
+    if (EVERY_WORD.test(before)) mode = "every";
+    else if (FIRST_WORD.test(before)) mode = "first";
+    const n = Number(m[1]!.replace(",", "."));
+    const unit = m[2]!;
+    const kind = unit === "km" || unit === "kilometer" || unit === "mil" ? "km" : "months";
+    const factor = unit === "mil" ? 10 : unit === "år" ? 12 : 1;
+    if (n > 0) out.push({ kind, value: n * factor, mode });
+    last = m.index! + m[0].length;
+  }
+  return out;
+}
+
+function parseServiceLine(line: string): Omit<ParsedService, "text"> {
+  let t = line
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    // Tusental med mellanslag eller punkt: "105 000" och "15.000" blir 105000 och 15000.
+    .replace(/(\d)[ .](?=\d{3}(?!\d))/g, "$1");
+  t = t
+    .replace(
+      /(^|[^a-zåäö])vart\s*(annat|andra|tredje|fjärde|femte|sjätte)\s+år(?![a-zåäö])/g,
+      (_, p: string, w: string) => `${p}var ${WORD_ORDINALS[w]} år`,
+    )
+    .replace(/(^|[^a-zåäö])varannan\s+månad(?![a-zåäö])/g, "$1var 2 månad")
+    .replace(/(^|[^a-zåäö])(?:varje|vart)\s+år(?![a-zåäö])/g, "$1var 1 år")
+    .replace(/(^|[^a-zåäö])årligen(?![a-zåäö])/g, "$1var 1 år");
+
+  // "... och sedan var 15000:e km": det före är första gången, det efter är intervallet.
+  const then = THEN_WORD.exec(t);
+  const head = then ? t.slice(0, then.index + then[1]!.length) : t;
+  const tail = then ? t.slice(then.index + then[0].length) : "";
+
+  const parts: { months: Interval | null; km: Interval | null } = { months: null, km: null };
+  for (const q of quantities(head)) {
+    if (parts[q.kind]) continue;
+    // Ett ensamt tal utan "vid" eller "var" räknas som intervall, precis som i eget intervall.
+    const mode = q.mode ?? (then ? "first" : "every");
+    parts[q.kind] = { first: q.value, every: mode === "every" ? q.value : null };
+  }
+  let mixed = false;
+  for (const q of quantities(tail)) {
+    const p = parts[q.kind];
+    if (p) p.every = q.value;
+    else mixed = true;
+  }
+
+  const warning =
+    !parts.months && !parts.km
+      ? "Kunde inte tolkas – kontrollera manuellt."
+      : mixed
+        ? "Kunde inte tolka allt på raden – kontrollera manuellt."
+        : null;
+  return { ...parts, warning };
+}
+
+export function parseServiceText(input: string): ParsedService[] {
+  const out: ParsedService[] = [];
+  for (const raw of input.split(/\r?\n/)) {
+    const line = raw
+      .replace(/^[\s*•·✓✔☐☑■□▪●○>–—-]+/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    // Rubriker och knappar som följt med i kopieringen har inga siffror och inget intervall
+    // i ord ("vartannat år", "varje år").
+    if (!/\d/.test(line) && !WORD_INTERVAL.test(line)) continue;
+    // En tid på egen rad, t.ex. "(0,10 t)", hör till raden ovanför.
+    const prev = out[out.length - 1];
+    if (prev && /^\([^)]*\)$/.test(line)) {
+      prev.text = `${prev.text} ${line}`;
+      continue;
+    }
+    out.push({ text: line, ...parseServiceLine(line) });
+  }
+  return out;
+}
+
+export type PartEval = Interval & {
+  // Null när åldern eller mätarställningen som behövs saknas.
+  hits: number[] | null;
+  done: number | null;
+};
+
+export type ServiceEval = {
+  // Null när det inte går att avgöra (raden gick inte att tolka eller värden saknas).
+  include: boolean | null;
+  months: PartEval | null;
+  km: PartEval | null;
+  // Vid både månader och km: det som genomförts flest gånger och alltså gäller.
+  basis: "months" | "km" | "equal" | null;
+};
+
+// Samma regler som för eget intervall: månader träffar under valt år, km inom ±10 000 km,
+// och har raden båda gäller det som genomförts flest gånger. Vid lika många räcker det att
+// något av dem träffar, eftersom det som kommer först gäller.
+export function evaluateService(
+  s: ParsedService,
+  ctx: { year: number | null; km: number | null },
+): ServiceEval {
+  const months: PartEval | null = s.months && {
+    ...s.months,
+    hits:
+      ctx.year === null
+        ? null
+        : occurrences(s.months.first, s.months.every, (ctx.year - 1) * 12, ctx.year * 12, false),
+    done: ctx.year === null ? null : timesDone(s.months.first, s.months.every, ctx.year * 12),
+  };
+  const km: PartEval | null = s.km && {
+    ...s.km,
+    hits:
+      ctx.km === null
+        ? null
+        : occurrences(
+            s.km.first,
+            s.km.every,
+            Math.max(0, ctx.km - KM_STEP),
+            ctx.km + KM_STEP,
+            true,
+          ),
+    done: ctx.km === null ? null : timesDone(s.km.first, s.km.every, ctx.km),
+  };
+  const hit = (p: PartEval) => (p.hits?.length ?? 0) > 0;
+  if ((!months && !km) || months?.hits === null || km?.hits === null) {
+    return { include: null, months, km, basis: null };
+  }
+  if (months && km) {
+    const basis = months.done === km.done ? "equal" : months.done! > km.done! ? "months" : "km";
+    const include =
+      basis === "months" ? hit(months) : basis === "km" ? hit(km) : hit(months) || hit(km);
+    return { include, months, km, basis };
+  }
+  return { include: hit((months ?? km)!), months, km, basis: null };
+}
+
+// Senaste och nästa tillfälle runt `at`; null där det inte finns något.
+export function intervalAround(
+  first: number,
+  every: number | null,
+  at: number,
+): { prev: number | null; next: number | null } {
+  if (at < first) return { prev: null, next: first };
+  if (every === null) return { prev: first, next: null };
+  const prev = first + Math.floor((at - first) / every) * every;
+  return { prev, next: prev + every };
+}
+
+// Uträkningen i klartext, rad för rad, så att man kan se varför något ska med eller inte.
+export function describeService(
+  s: ParsedService,
+  e: ServiceEval,
+  ctx: { year: number | null; km: number | null },
+): string[] {
+  if (!s.months && !s.km) return [s.warning ?? "Kunde inte tolkas – kontrollera manuellt."];
+  const f = (n: number) => n.toLocaleString("sv-SE");
+  const times = (n: number) => `Genomförd ${n} ${n === 1 ? "gång" : "gånger"} hittills.`;
+  const lines: string[] = [];
+
+  function part(p: PartEval, label: string, unit: string, at: number | null, where: string) {
+    if (p.hits === null || at === null) {
+      lines.push(`${label}: fyll i ${unit === "mån" ? "ålder" : "mätarställning"} överst.`);
+      return;
+    }
+    if (p.hits.length > 0) {
+      const list = p.hits
+        .slice(0, 5)
+        .map((h) => `${f(h)} ${unit} · ${ordinal(occurrenceFrom(p.first, p.every, h))}`)
+        .join(", ");
+      lines.push(`${label}: träffar ${where}: ${list}. ${times(p.done!)}`);
+      return;
+    }
+    const { prev, next } = intervalAround(p.first, p.every, at);
+    lines.push(
+      `${label}: träffar inte ${where}.` +
+        (next === null
+          ? " Inga fler tillfällen."
+          : ` Nästa: ${f(next)} ${unit} (om ${f(next - at)} ${unit}).`) +
+        (prev === null ? "" : ` Senaste: ${f(prev)} ${unit} (för ${f(at - prev)} ${unit} sedan).`) +
+        ` ${times(p.done!)}`,
+    );
+  }
+
+  if (e.months) {
+    const at = ctx.year === null ? null : ctx.year * 12;
+    part(e.months, "Månader", "mån", at, `år ${ctx.year} (${at})`);
+  }
+  if (e.km) part(e.km, "Km", "km", ctx.km, "mätarställningen");
+  if (e.basis === "equal") {
+    lines.push(
+      `Lika många gånger på år och km (${e.months!.done}). Tas med om något av dem träffar.`,
+    );
+  } else if (e.basis) {
+    const [a, b] =
+      e.basis === "months" ? [e.months!.done, e.km!.done] : [e.km!.done, e.months!.done];
+    const name = e.basis === "months" ? "år" : "kilometer";
+    lines.push(`Genomförd flest gånger: ${name} (${a} mot ${b}). Går på ${name}.`);
+  }
+  if (s.warning) lines.push(s.warning);
+  return lines;
+}

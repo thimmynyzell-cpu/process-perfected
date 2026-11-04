@@ -1,5 +1,8 @@
 import {
   ageRule,
+  describeService,
+  evaluateService,
+  parseServiceText,
   formatAge,
   surroundingOccurrences,
   normalizeInterval,
@@ -253,5 +256,136 @@ describe("formatAge", () => {
     expect(formatAge(13)).toBe("1 år och 1 månad");
     expect(formatAge(5)).toBe("5 månader");
     expect(formatAge(0)).toBe("0 månader");
+  });
+});
+
+describe("parseServiceText", () => {
+  const pasted = `Var 30000:e km oberoende av månader  (0,10 t)
+
+* Var 90000:e km oberoende av månader  (0,50 t)
+* Vid 105000 km eller 72 månader och sedan var 15000:e km eller 12:e månad  (0,10 t)
+* Vid 150000 km oberoende av månader och sedan var 90000:e km  (0,20 t)`;
+
+  it("reads the four example lines", () => {
+    const items = parseServiceText(pasted);
+    expect(items.map((i) => i.text)).toEqual([
+      "Var 30000:e km oberoende av månader (0,10 t)",
+      "Var 90000:e km oberoende av månader (0,50 t)",
+      "Vid 105000 km eller 72 månader och sedan var 15000:e km eller 12:e månad (0,10 t)",
+      "Vid 150000 km oberoende av månader och sedan var 90000:e km (0,20 t)",
+    ]);
+    expect(items.map(({ months, km, warning }) => ({ months, km, warning }))).toEqual([
+      { months: null, km: { first: 30_000, every: 30_000 }, warning: null },
+      { months: null, km: { first: 90_000, every: 90_000 }, warning: null },
+      {
+        months: { first: 72, every: 12 },
+        km: { first: 105_000, every: 15_000 },
+        warning: null,
+      },
+      { months: null, km: { first: 150_000, every: 90_000 }, warning: null },
+    ]);
+  });
+
+  it("skips headings and buttons, and joins a time on its own line", () => {
+    const items = parseServiceText(
+      "TILLÄGGSSERVICE\nVälj eventuell tilläggsservice\nVar 30000:e km oberoende av månader\n (0,10 t)\nTILLBAKA\nNÄSTA",
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0]!.text).toBe("Var 30000:e km oberoende av månader (0,10 t)");
+  });
+
+  it("understands other common wordings", () => {
+    const one = (t: string) => {
+      const [i] = parseServiceText(t);
+      return { months: i!.months, km: i!.km };
+    };
+    expect(one("Var 24:e månad oberoende av km")).toEqual({
+      months: { first: 24, every: 24 },
+      km: null,
+    });
+    expect(one("Var 4:e år eller 60 000:e km")).toEqual({
+      months: { first: 48, every: 48 },
+      km: { first: 60_000, every: 60_000 },
+    });
+    expect(one("Byts vartannat år")).toEqual({ months: { first: 24, every: 24 }, km: null });
+    expect(one("Vid 60000 km eller 4 år")).toEqual({
+      months: { first: 48, every: null },
+      km: { first: 60_000, every: null },
+    });
+    expect(one("Första gången vid 30 000 km, därefter var 60.000:e km")).toEqual({
+      months: null,
+      km: { first: 30_000, every: 60_000 },
+    });
+    expect(one("Var 1500:e mil")).toEqual({ months: null, km: { first: 15_000, every: 15_000 } });
+  });
+
+  it("flags lines it cannot read", () => {
+    const [i] = parseServiceText("Kontroll av bromsvätska (0,10 t)");
+    expect(i!.months).toBeNull();
+    expect(i!.km).toBeNull();
+    expect(i!.warning).toMatch(/Kunde inte tolkas/);
+  });
+});
+
+describe("evaluateService", () => {
+  const items = parseServiceText(`Var 30000:e km oberoende av månader (0,10 t)
+Var 90000:e km oberoende av månader (0,50 t)
+Vid 105000 km eller 72 månader och sedan var 15000:e km eller 12:e månad (0,10 t)
+Vid 150000 km oberoende av månader och sedan var 90000:e km (0,20 t)`);
+  const include = (year: number | null, km: number | null) =>
+    items.map((s) => evaluateService(s, { year, km }).include);
+
+  it("decides which lines to tick at 10 years and 150 000 km", () => {
+    expect(include(10, 150_000)).toEqual([true, false, true, true]);
+    // Rad 3: 72 mån och sedan var 12:e är genomförd 5 gånger, km bara 4, så den går på år.
+    const e = evaluateService(items[2]!, { year: 10, km: 150_000 });
+    expect(e.basis).toBe("months");
+    expect(e.months!.done).toBe(5);
+    expect(e.km!.done).toBe(4);
+  });
+
+  it("decides which lines to tick at 5 years and 100 000 km", () => {
+    expect(include(5, 100_000)).toEqual([true, true, true, false]);
+    // Rad 3: inget genomfört än på något av dem, men 105 000 km ligger inom ±10 000 km.
+    expect(evaluateService(items[2]!, { year: 5, km: 100_000 }).basis).toBe("equal");
+  });
+
+  it("goes by the part done most times even when the other one hits", () => {
+    // 7 år och 200 000 km: km genomförd 7 gånger (105k … 195k), år 2 gånger (72, 84).
+    const e = evaluateService(items[2]!, { year: 7, km: 200_000 });
+    expect(e.basis).toBe("km");
+    expect(e.months!.hits).toEqual([84]);
+    expect(e.km!.hits).toEqual([195_000, 210_000]);
+    expect(e.include).toBe(true);
+    // 7 år och 222 000 km: km genomförd 8 gånger och träffar 225 000 km.
+    const miss = evaluateService(items[2]!, { year: 7, km: 222_000 });
+    expect(miss.km!.hits).toEqual([225_000]);
+    expect(miss.include).toBe(true);
+    // Var 90 000:e km vid 135 000 km: varken 90 000 eller 180 000 ligger inom ±10 000 km.
+    const off = evaluateService(items[1]!, { year: 7, km: 135_000 });
+    expect(off.include).toBe(false);
+  });
+
+  it("cannot decide without the age or odometer reading it needs", () => {
+    expect(include(10, null)).toEqual([null, null, null, null]);
+    expect(evaluateService(items[0]!, { year: null, km: 150_000 }).include).toBe(true);
+  });
+
+  it("explains the decision", () => {
+    const lines = describeService(
+      items[2]!,
+      evaluateService(items[2]!, { year: 10, km: 150_000 }),
+      {
+        year: 10,
+        km: 150_000,
+      },
+    );
+    expect(lines[0]).toBe(
+      "Månader: träffar år 10 (120): 120 mån · 5:e. Genomförd 5 gånger hittills.",
+    );
+    expect(lines[1]).toMatch(
+      /^Km: träffar mätarställningen: 150\s000 km · 4:e\. Genomförd 4 gånger/,
+    );
+    expect(lines[2]).toBe("Genomförd flest gånger: år (5 mot 4). Går på år.");
   });
 });

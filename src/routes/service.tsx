@@ -1,13 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Megaphone, Plus, Wrench, X } from "lucide-react";
+import { Check, Megaphone, Plus, Wrench, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   EXTRA_SERVICES,
   KM_INTERVALS,
   ageRule,
+  describeService,
+  evaluateService,
   isHalfYear,
   formatAge,
   kmRule,
@@ -18,11 +21,14 @@ import {
   occurrenceFrom,
   occurrenceNumber,
   ordinal,
+  parseServiceText,
   ruleHits,
   surroundingOccurrences,
   timesDone,
   yearChoices,
+  type ParsedService,
   type Rule,
+  type ServiceEval,
 } from "@/lib/serviceSchedule";
 
 export const Route = createFileRoute("/service")({
@@ -175,12 +181,71 @@ function ManualResultView({ result }: { result: ManualResult }) {
   );
 }
 
+// Listan ser ut som tilläggsservicen på bokningssidan, så att det är lätt att klicka i samma
+// rutor där. Därför har den egna färger och typsnitt i stället för sidans tema.
+function ServicePanel({ items }: { items: { s: ParsedService; e: ServiceEval }[] }) {
+  return (
+    <div
+      className="max-w-[340px] rounded-[4px] border border-[#e3e3e3] bg-white px-6 pb-6 pt-5 text-[#1b1b1b] shadow-sm"
+      style={{ fontFamily: "Roboto, Arial, sans-serif" }}
+    >
+      <h3
+        className="mb-3.5 text-lg font-bold text-[#111]"
+        style={{ fontFamily: '"Roboto Slab", Georgia, serif' }}
+      >
+        TILLÄGGSSERVICE
+      </h3>
+      <p className="mb-5 font-bold text-[#111]">Välj eventuell tilläggsservice</p>
+      <ul className="space-y-[18px] pl-1">
+        {items.map(({ s, e }, i) => {
+          const time = /^(.*?)\s*(\([^)]*\))\s*$/.exec(s.text);
+          return (
+            <li key={i} className="flex items-start gap-2.5 text-[15px] leading-tight">
+              {e.include ? (
+                <span
+                  role="img"
+                  aria-label="Ska med"
+                  className="mt-0.5 grid size-[15px] shrink-0 place-items-center rounded-[1px] bg-[#ffe500] outline outline-1 outline-[#b8a400]"
+                >
+                  <Check className="size-3 text-black" strokeWidth={3.5} />
+                </span>
+              ) : (
+                <span
+                  role="img"
+                  aria-label={e.include === null ? "Går inte att avgöra" : "Ska inte med"}
+                  className="mt-0.5 size-[15px] shrink-0 rounded-[1px] bg-[#7b7b7b]"
+                />
+              )}
+              <span className="max-w-[230px]">
+                {time ? time[1] : s.text}
+                {time && (
+                  <>
+                    <br />
+                    {"\u00a0"}
+                    {time[2]}
+                  </>
+                )}
+                {!s.months && !s.km && (
+                  <span className="mt-1 block text-xs text-[#b25b00]">
+                    Kunde inte tolkas – kontrollera manuellt
+                  </span>
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function ServicePage() {
   const [months, setMonths] = useState("");
   const [yearText, setYearText] = useState("");
   const [pick, setPick] = useState<number | null>(null);
   const [km, setKm] = useState("");
   const [manuals, setManuals] = useState<ManualText[]>([blankManual(1)]);
+  const [serviceText, setServiceText] = useState("");
   const [nextId, setNextId] = useState(2);
 
   // Månader och år hänger ihop: ändrar man det ena uppdateras det andra.
@@ -206,6 +271,7 @@ function ServicePage() {
     setKm("");
     setManuals([blankManual(nextId)]);
     setNextId(nextId + 1);
+    setServiceText("");
   }
   function addManual() {
     setManuals([...manuals, blankManual(nextId)]);
@@ -218,6 +284,7 @@ function ServicePage() {
     value === null ? null : pick !== null && choices.includes(pick) ? pick : monthsToYear(value);
   const kmValue = parse(km);
   const ctx = { year, km: kmValue };
+  const services = parseServiceText(serviceText).map((s) => ({ s, e: evaluateService(s, ctx) }));
 
   // Bara rader som träffar visas.
   function matching(rows: Row[]) {
@@ -603,6 +670,73 @@ function ServicePage() {
           >
             <Plus className="size-4" /> Lägg till eget intervall
           </Button>
+        </section>
+
+        <section className="mt-8 space-y-3">
+          <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">
+            Klistra in tilläggsservice
+          </h2>
+          <p className="text-sm text-foreground/75">
+            Klistra in tilläggsservicen från bokningssidan, en per rad. Sidan räknar ut vilka som
+            ska med utifrån ålder och mätarställning överst, med samma regler som eget intervall.
+            Tiden inom parentes, till exempel (0,10 t), räknas inte.
+          </p>
+          <div className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="serviceText" className="text-base font-semibold">
+                Fritext
+              </Label>
+              <button
+                type="button"
+                onClick={() => setServiceText("")}
+                className="rounded px-2 py-1 text-sm text-foreground/75 hover:bg-accent"
+              >
+                Rensa
+              </button>
+            </div>
+            <Textarea
+              id="serviceText"
+              rows={6}
+              value={serviceText}
+              onChange={(e) => setServiceText(e.target.value)}
+              placeholder={
+                "Var 30000:e km oberoende av månader (0,10 t)\nVid 105000 km eller 72 månader och sedan var 15000:e km eller 12:e månad (0,10 t)"
+              }
+              className="mt-2 rounded-xl border-[1.5px] border-foreground/25 bg-background text-sm placeholder:text-muted-foreground/60"
+            />
+          </div>
+          {services.length > 0 && (
+            <>
+              {services.some(({ s, e }) => e.include === null && (s.months || s.km)) && (
+                <p className="text-sm font-medium text-amber-700">
+                  Fyll i ålder och mätarställning överst så räknas listan ut.
+                </p>
+              )}
+              <ServicePanel items={services} />
+              <details className="rounded-2xl border bg-card shadow-sm">
+                <summary className="cursor-pointer px-4 py-3 font-semibold">
+                  Visa uträkning ({services.filter(({ e }) => e.include).length} av{" "}
+                  {services.length} ska med
+                  {services.some(({ e }) => e.include === null)
+                    ? `, ${services.filter(({ e }) => e.include === null).length} går inte att avgöra`
+                    : ""}
+                  )
+                </summary>
+                <div className="space-y-3 border-t px-4 py-3 text-sm">
+                  {services.map(({ s, e }, i) => (
+                    <div key={i} className="space-y-0.5">
+                      <p className="font-semibold">{s.text}</p>
+                      {describeService(s, e, ctx).map((l) => (
+                        <p key={l} className="text-foreground/80">
+                          {l}
+                        </p>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </details>
+            </>
+          )}
         </section>
       </main>
     </div>
