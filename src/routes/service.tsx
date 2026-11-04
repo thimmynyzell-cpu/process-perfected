@@ -303,7 +303,10 @@ function MercedesCard({ c }: { c: MercedesCode }) {
         )}
         {c.note && <span className="text-sm text-foreground/75">{c.note}</span>}
       </div>
-      <p className="mt-2 text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">
+      <p className="mt-3 rounded-lg border border-l-4 border-amber-500/70 bg-amber-500/10 px-3 py-1.5 text-sm font-semibold">
+        Välj även alternativa kontroller 0,2
+      </p>
+      <p className="mt-3 text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">
         Service items
       </p>
       <div className="mt-1.5 flex flex-wrap gap-1.5">
