@@ -1,5 +1,6 @@
 import {
   ageRule,
+  findMercedesCodes,
   formatKmInput,
   kmSuggestion,
   describeService,
@@ -421,5 +422,35 @@ describe("kmSuggestion", () => {
     expect(kmSuggestion("0")).toBeNull();
     expect(kmSuggestion("")).toBeNull();
     expect(kmSuggestion("9,5")).toBeNull();
+  });
+});
+
+describe("findMercedesCodes", () => {
+  const services = (q: string) => findMercedesCodes(q).exact.map((c) => `${c.service} ${c.code}`);
+
+  it("finds a service and its items", () => {
+    const [a1] = findMercedesCodes("A1").exact;
+    expect(a1).toEqual({ service: "A1", code: "D0D", items: [1, 3, 4] });
+    expect(services("a1")).toEqual(["A1 D0D"]);
+    expect(services(" AK ")).toEqual(["AK 10D0E"]);
+  });
+
+  it("shows every variant when a service is listed twice", () => {
+    expect(services("B5")).toEqual(["B5 5E0K", "B5 3E0H"]);
+    expect(services("B0")).toEqual(["B0 1607", "B0 960F"]);
+  });
+
+  it("finds by code too, and reads the letter O as zero", () => {
+    expect(services("D0D")).toEqual(["A1 D0D"]);
+    expect(services("dod")).toEqual(["A1 D0D"]);
+    expect(services("AO")).toEqual(["A0 850D"]);
+  });
+
+  it("suggests close codes when nothing matches exactly", () => {
+    const r = findMercedesCodes("AX");
+    expect(r.exact).toEqual([]);
+    expect(r.similar).toEqual([]);
+    expect(findMercedesCodes("10").similar.map((c) => c.service)).toEqual(["AK", "BK"]);
+    expect(findMercedesCodes("").exact).toEqual([]);
   });
 });

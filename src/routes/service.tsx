@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Check, ClipboardPaste, Megaphone, PencilLine, Plus, Wrench, X } from "lucide-react";
+import { Car, Check, ClipboardPaste, Megaphone, PencilLine, Plus, Wrench, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,8 @@ import {
   ageRule,
   describeService,
   evaluateService,
+  findMercedesCodes,
+  MERCEDES_CODES,
   isHalfYear,
   formatAge,
   formatKmInput,
@@ -28,6 +30,7 @@ import {
   surroundingOccurrences,
   timesDone,
   yearChoices,
+  type MercedesCode,
   type ParsedService,
   type Rule,
   type ServiceEval,
@@ -269,6 +272,78 @@ function ServicePanel({ items }: { items: { s: ParsedService; e: ServiceEval }[]
   );
 }
 
+function MercedesCard({ c }: { c: MercedesCode }) {
+  return (
+    <div className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="text-2xl font-bold text-primary">{c.service}</span>
+        {c.code && (
+          <span className="text-sm text-foreground/75">
+            Kod <span className="font-semibold text-foreground">{c.code}</span>
+          </span>
+        )}
+        {c.note && <span className="text-sm text-foreground/75">{c.note}</span>}
+      </div>
+      <p className="mt-2 text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">
+        Service items
+      </p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {c.items.map((n, i) => (
+          <span
+            key={i}
+            className="min-w-8 rounded-full bg-primary/10 px-2.5 py-0.5 text-center text-sm font-semibold tabular-nums text-primary"
+          >
+            {n}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MercedesResults({ query, onPick }: { query: string; onPick: (s: string) => void }) {
+  if (!query.trim()) return null;
+  const { exact, similar } = findMercedesCodes(query);
+  if (exact.length > 0) {
+    return (
+      <div className="space-y-3">
+        {exact.length > 1 && (
+          <p className="text-sm font-medium text-foreground/80">
+            {exact[0]!.service} finns i {exact.length} varianter. Kontrollera koden i servicehäftet.
+          </p>
+        )}
+        {exact.map((c) => (
+          <MercedesCard key={`${c.service}-${c.code}`} c={c} />
+        ))}
+      </div>
+    );
+  }
+  if (similar.length > 0) {
+    return (
+      <div className="space-y-2">
+        <p className="text-sm text-foreground/80">Ingen exakt träff. Menade du:</p>
+        <div className="flex flex-wrap gap-2">
+          {[...new Set(similar.map((c) => c.service))].map((sv) => (
+            <button
+              key={sv}
+              type="button"
+              onClick={() => onPick(sv)}
+              className="rounded-full border bg-card px-3.5 py-1 text-sm font-semibold text-primary hover:bg-primary/10"
+            >
+              {sv}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <p className="text-sm font-medium text-amber-700">
+      Hittade ingen servicekod för &quot;{query.trim()}&quot;.
+    </p>
+  );
+}
+
 function ServicePage() {
   const [months, setMonths] = useState("");
   const [yearText, setYearText] = useState("");
@@ -278,7 +353,8 @@ function ServicePage() {
   const [manuals, setManuals] = useState<ManualText[]>([blankManual(1)]);
   const [serviceText, setServiceText] = useState("");
   // Fritext är förvalt; bara det valda sättet att lägga in intervall visas.
-  const [mode, setMode] = useState<"text" | "manual">("text");
+  const [mode, setMode] = useState<"text" | "manual" | "mercedes">("text");
+  const [mbQuery, setMbQuery] = useState("");
   const serviceRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (serviceRef.current) growToFit(serviceRef.current);
@@ -309,6 +385,7 @@ function ServicePage() {
     setManuals([blankManual(nextId)]);
     setNextId(nextId + 1);
     setServiceText("");
+    setMbQuery("");
   }
   function addManual() {
     setManuals([...manuals, blankManual(nextId)]);
@@ -623,6 +700,7 @@ function ServicePage() {
               [
                 ["text", "Fritext", ClipboardPaste],
                 ["manual", "Manuellt", PencilLine],
+                ["mercedes", "Servicekoder Mercedes", Car],
               ] as const
             ).map(([value, label, Icon]) => (
               <button
@@ -632,11 +710,11 @@ function ServicePage() {
                 onClick={() => setMode(value)}
                 className={
                   mode === value
-                    ? "inline-flex items-center gap-2 rounded-full bg-background px-6 py-2.5 text-base font-semibold text-primary shadow-sm"
-                    : "inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-base font-medium text-foreground/70 hover:text-foreground"
+                    ? "inline-flex items-center gap-2 rounded-full bg-background px-3 py-2 text-sm font-semibold text-primary shadow-sm sm:px-6 sm:py-2.5 sm:text-base"
+                    : "inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium text-foreground/70 hover:text-foreground sm:px-6 sm:py-2.5 sm:text-base"
                 }
               >
-                <Icon className="size-5" /> {label}
+                <Icon className="hidden size-5 sm:block" /> {label}
               </button>
             ))}
           </div>
@@ -702,6 +780,66 @@ function ServicePage() {
                   </details>
                 </>
               )}
+            </div>
+          ) : mode === "mercedes" ? (
+            <div className="space-y-3">
+              <p className="mx-auto max-w-prose text-center text-sm text-foreground/75">
+                Skriv in servicen, till exempel A1, så visas koden och vilka service items som
+                ingår.
+              </p>
+              <div className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="mbQuery" className="text-base font-semibold">
+                    Service
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={() => setMbQuery("")}
+                    className="rounded px-2 py-1 text-sm text-foreground/75 hover:bg-accent"
+                  >
+                    Rensa
+                  </button>
+                </div>
+                <Input
+                  id="mbQuery"
+                  placeholder="A1"
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  value={mbQuery}
+                  onChange={(e) => setMbQuery(e.target.value)}
+                  className="mt-2 h-9 max-w-32 rounded-full border-[1.5px] border-foreground/25 bg-background px-3.5 text-sm font-semibold uppercase placeholder:font-medium placeholder:normal-case placeholder:text-muted-foreground/60 hover:border-foreground/40"
+                />
+              </div>
+              <MercedesResults query={mbQuery} onPick={setMbQuery} />
+              <details className="rounded-2xl border bg-card shadow-sm">
+                <summary className="cursor-pointer px-4 py-3 font-semibold">
+                  Visa alla servicekoder
+                </summary>
+                <div className="overflow-x-auto border-t">
+                  <table className="w-full text-sm tabular-nums">
+                    <thead>
+                      <tr className="text-left text-foreground/75">
+                        <th className="px-4 py-2 font-semibold">Service</th>
+                        <th className="px-4 py-2 font-semibold">Kod</th>
+                        <th className="px-4 py-2 font-semibold">Service items</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {MERCEDES_CODES.map((c) => (
+                        <tr key={`${c.service}-${c.code}`} className="border-t">
+                          <td className="px-4 py-1.5 font-semibold text-primary">{c.service}</td>
+                          <td className="px-4 py-1.5">{c.code ?? "–"}</td>
+                          <td className="px-4 py-1.5">
+                            {c.items.join(", ")}
+                            {c.note ? ` (${c.note})` : ""}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
             </div>
           ) : (
             <div className="space-y-3">

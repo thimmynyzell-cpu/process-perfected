@@ -469,3 +469,82 @@ export function kmSuggestion(text: string): string | null {
   const digits = text.replace(/\s/g, "");
   return /^[1-9]\d{0,2}$/.test(digits) ? formatKmInput(`${digits}000`) : null;
 }
+
+// ---- Servicekoder Mercedes ----
+
+export type MercedesCode = {
+  service: string;
+  // Koden i servicehäftet, t.ex. "D0D"; null där den saknas i listan.
+  code: string | null;
+  items: number[];
+  note?: string;
+};
+
+export const MERCEDES_CODES: MercedesCode[] = [
+  { service: "A", code: "505", items: [1, 3] },
+  { service: "A1", code: "D0D", items: [1, 3, 4] },
+  { service: "A2", code: null, items: [1, 3, 4, 8, 10, 12, 20, 25] },
+  { service: "A3", code: "550A", items: [1, 3, 8, 11] },
+  { service: "A4", code: "D50J", items: [1, 3, 8, 10, 11] },
+  { service: "A5", code: null, items: [1, 3, 4, 8, 12] },
+  { service: "A6", code: "DD0S", items: [1, 3, 4, 8, 10, 11] },
+  { service: "A7", code: "G50M", items: [1, 3, 20] },
+  { service: "A8", code: "Q50V", items: [1, 3, 10, 20] },
+  { service: "A9", code: "GD0V", items: [1, 3, 4, 20] },
+  { service: "A0", code: "850D", items: [1, 3, 10] },
+  { service: "AC", code: "QD051", items: [1, 3, 4, 10, 20] },
+  { service: "AF", code: "KD001", items: [1, 3, 4, 8, 12, 20] },
+  { service: "AH", code: "801050E", items: [1, 3, 13, 24] },
+  { service: "AG", code: "VD0A1", items: [1, 3, 4, 8, 10, 11, 20] },
+  { service: "AK", code: "10D0E", items: [1, 3, 13] },
+  { service: "AP", code: "15D0K", items: [1, 3, 4, 8, 11, 13] },
+  { service: "B", code: "606", items: [2, 3] },
+  { service: "B1", code: "E0E", items: [2, 3, 4] },
+  { service: "B2", code: "8E0N", items: [2, 3, 4, 10] },
+  { service: "B3", code: "560B", items: [2, 3, 8, 11] },
+  { service: "B4", code: "B60H", items: [2, 3, 8, 10, 11] },
+  { service: "B5", code: "5E0K", items: [2, 3, 4, 8, 11] },
+  { service: "B5", code: "3E0H", items: [2, 3, 4, 8, 12] },
+  { service: "B6", code: "DE0T", items: [2, 3, 4, 8, 10, 11] },
+  { service: "B7", code: "G60N", items: [2, 3, 20] },
+  { service: "B7", code: "GN061", items: [2, 3, 15, 20] },
+  { service: "B8", code: "Q60W", items: [2, 3, 10, 20] },
+  { service: "B9", code: "GE0W", items: [2, 3, 4, 20] },
+  { service: "B0", code: "1607", items: [2, 3, 8] },
+  { service: "B0", code: "960F", items: [2, 3, 8, 10], note: "På GL63" },
+  { service: "BD", code: "M60T", items: [2, 3, 8, 11, 20] },
+  { service: "BE", code: "V6031", items: [2, 3, 8, 10, 11, 20] },
+  { service: "BF", code: null, items: [2, 3, 8, 11, 12] },
+  { service: "BK", code: "10E0F", items: [2, 3, 4, 13] },
+  { service: "BS", code: "1Q60X", items: [2, 3, 10, 13, 20] },
+  { service: "BH", code: null, items: [2, 3, 13, 15] },
+  { service: "BJ", code: null, items: [2, 3, 10, 13, 15] },
+  { service: "BC", code: null, items: [2, 3, 4, 10, 15, 20] },
+  // Som i listan, där 3 står två gånger.
+  { service: "BT", code: null, items: [2, 3, 4, 3, 20, 11] },
+];
+
+// Stora bokstäver utan mellanslag och bindestreck. Bokstaven O räknas som noll, eftersom
+// koderna bara har nollor (A0, D0D) och de är lätta att blanda ihop.
+function normalizeCode(text: string): string {
+  return text
+    .toUpperCase()
+    .replace(/O/g, "0")
+    .replace(/[\s–—-]/g, "");
+}
+
+// Sök på servicen (A1) eller koden (D0D). Utan exakt träff visas de som börjar likadant.
+export function findMercedesCodes(query: string): {
+  exact: MercedesCode[];
+  similar: MercedesCode[];
+} {
+  const q = normalizeCode(query);
+  if (!q) return { exact: [], similar: [] };
+  const matches = (c: MercedesCode, f: (t: string) => boolean) =>
+    f(normalizeCode(c.service)) || (c.code !== null && f(normalizeCode(c.code)));
+  const exact = MERCEDES_CODES.filter((c) => matches(c, (t) => t === q));
+  const similar = exact.length
+    ? []
+    : MERCEDES_CODES.filter((c) => matches(c, (t) => t.startsWith(q)));
+  return { exact, similar };
+}
