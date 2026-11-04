@@ -591,8 +591,7 @@ function ServicePage() {
           {mode === "text" ? (
             <div className="space-y-3">
               <p className="mx-auto max-w-prose text-center text-sm text-foreground/75">
-                Klistra in tilläggsservicen från bokningssidan, en per rad. Sidan räknar ut vilka
-                som ska med utifrån ålder och mätarställning överst, med samma regler som Manuellt.
+                Klistra in tilläggsservicen från bokningssidan, en per rad.
               </p>
               <div className="rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
                 <div className="flex items-center justify-between">
