@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Car, Check, ClipboardPaste, Megaphone, PencilLine, Plus, Wrench, X } from "lucide-react";
+import { Check, ClipboardPaste, Megaphone, PencilLine, Plus, Wrench, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -269,6 +269,16 @@ function ServicePanel({ items }: { items: { s: ParsedService; e: ServiceEval }[]
         })}
       </ul>
     </div>
+  );
+}
+
+// Mercedes trekantiga stjärna i en ring, som ikon på fliken.
+function MercedesStar({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M12 2 L13.39 11.2 L20.66 17 L12 13.6 L3.34 17 L10.61 11.2 Z" fill="currentColor" />
+    </svg>
   );
 }
 
@@ -700,7 +710,7 @@ function ServicePage() {
               [
                 ["text", "Fritext", ClipboardPaste],
                 ["manual", "Manuellt", PencilLine],
-                ["mercedes", "Servicekoder Mercedes", Car],
+                ["mercedes", "Mercedes", MercedesStar],
               ] as const
             ).map(([value, label, Icon]) => (
               <button
