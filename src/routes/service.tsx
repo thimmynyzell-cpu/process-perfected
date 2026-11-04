@@ -27,6 +27,7 @@ import {
   ordinal,
   parseServiceText,
   ruleHits,
+  summarizeService,
   surroundingOccurrences,
   timesDone,
   yearChoices,
@@ -351,6 +352,67 @@ function MercedesResults({ query, onPick }: { query: string; onPick: (s: string)
     <p className="text-sm font-medium text-amber-700">
       Hittade ingen servicekod för &quot;{query.trim()}&quot;.
     </p>
+  );
+}
+
+// Kort förklaring bredvid listan: bock eller kryss för km och år per rad, och vid båda
+// vilket som gäller.
+function ServiceWhy({ items }: { items: { s: ParsedService; e: ServiceEval }[] }) {
+  return (
+    <div className="min-w-[240px] flex-1 rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
+      <p className="text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">Varför</p>
+      <ol className="mt-2 space-y-2.5">
+        {items.map(({ s, e }, i) => {
+          const { parts, choice } = summarizeService(e);
+          const title = s.text.replace(/\s*\([^)]*\)\s*$/, "");
+          return (
+            <li key={i} className="flex gap-2.5 text-sm">
+              <span
+                className={
+                  e.include
+                    ? "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
+                    : "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-muted text-xs font-bold text-foreground/70"
+                }
+                aria-label={
+                  e.include
+                    ? "Ska med"
+                    : e.include === null
+                      ? "Går inte att avgöra"
+                      : "Ska inte med"
+                }
+              >
+                {e.include ? "✓" : e.include === null ? "?" : "✗"}
+              </span>
+              <div className="min-w-0 space-y-1">
+                <p className="truncate font-medium" title={title}>
+                  {title}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {parts.length === 0 && (
+                    <span className="text-xs text-amber-700">Kunde inte tolkas</span>
+                  )}
+                  {parts.map((p) => (
+                    <span
+                      key={p.kind}
+                      className={
+                        p.hit
+                          ? "rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary"
+                          : "rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-foreground/70"
+                      }
+                    >
+                      {p.kind === "km" ? "Km" : "År"} {p.hit ? "✓" : p.hit === null ? "?" : "✗"}
+                      {p.detail ? ` ${p.detail}` : ""}
+                      {p.hit === null ? ` fyll i ${p.kind === "km" ? "km" : "ålder"}` : ""}
+                    </span>
+                  ))}
+                </div>
+                {choice && <p className="text-xs font-medium text-foreground/80">{choice}</p>}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 
@@ -746,7 +808,10 @@ function ServicePage() {
                       Fyll i ålder och mätarställning överst så räknas listan ut.
                     </p>
                   )}
-                  <ServicePanel items={services} />
+                  <div className="flex flex-wrap items-start gap-4">
+                    <ServicePanel items={services} />
+                    <ServiceWhy items={services} />
+                  </div>
                   <details className="rounded-2xl border bg-card shadow-sm">
                     <summary className="cursor-pointer px-4 py-3 font-semibold">
                       Visa uträkning ({services.filter(({ e }) => e.include).length} av{" "}

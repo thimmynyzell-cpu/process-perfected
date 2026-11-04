@@ -1,5 +1,6 @@
 import {
   ageRule,
+  summarizeService,
   findMercedesCodes,
   formatKmInput,
   kmSuggestion,
@@ -452,5 +453,31 @@ describe("findMercedesCodes", () => {
     expect(r.similar).toEqual([]);
     expect(findMercedesCodes("10").similar.map((c) => c.service)).toEqual(["AK", "BK"]);
     expect(findMercedesCodes("").exact).toEqual([]);
+  });
+});
+
+describe("summarizeService", () => {
+  const [single, , dual] = parseServiceText(`Var 30000:e km oberoende av månader (0,10 t)
+Var 90000:e km oberoende av månader (0,50 t)
+Vid 105000 km eller 72 månader och sedan var 15000:e km eller 12:e månad (0,10 t)`);
+
+  it("gives a tick per part and which one to go by", () => {
+    const one = summarizeService(evaluateService(single!, { year: 10, km: 150_000 }));
+    expect(one.parts).toHaveLength(1);
+    expect(one.parts[0]).toMatchObject({ kind: "km", hit: true, done: 5 });
+    expect(one.parts[0]!.detail).toMatch(/^150\s000 km · 5:e$/);
+    expect(one.choice).toBeNull();
+
+    const two = summarizeService(evaluateService(dual!, { year: 7, km: 200_000 }));
+    expect(two.parts.map((p) => [p.kind, p.hit])).toEqual([
+      ["months", true],
+      ["km", true],
+    ]);
+    expect(two.choice).toBe("Gå på km: genomförd 7 gånger mot år 2 gånger");
+  });
+
+  it("marks parts it cannot decide", () => {
+    const r = summarizeService(evaluateService(dual!, { year: null, km: 200_000 }));
+    expect(r.parts.map((p) => p.hit)).toEqual([null, true]);
   });
 });

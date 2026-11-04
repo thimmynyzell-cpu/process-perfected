@@ -548,3 +548,43 @@ export function findMercedesCodes(query: string): {
     : MERCEDES_CODES.filter((c) => matches(c, (t) => t.startsWith(q)));
   return { exact, similar };
 }
+
+// Kort sammanfattning per rad för rutan bredvid listan: bock eller kryss för km och år,
+// och vid båda vilket som gäller.
+export type ShortPart = {
+  kind: "months" | "km";
+  // Null när åldern eller mätarställningen saknas.
+  hit: boolean | null;
+  // Första träffen, t.ex. "150 000 km · 5:e".
+  detail: string | null;
+  done: number | null;
+};
+
+export function summarizeService(e: ServiceEval): { parts: ShortPart[]; choice: string | null } {
+  const f = (n: number) => n.toLocaleString("sv-SE");
+  const part = (p: PartEval, kind: ShortPart["kind"]): ShortPart => {
+    const h = p.hits?.[0];
+    return {
+      kind,
+      hit: p.hits === null ? null : p.hits.length > 0,
+      detail:
+        h === undefined
+          ? null
+          : `${f(h)} ${kind === "km" ? "km" : "mån"} · ${ordinal(occurrenceFrom(p.first, p.every, h))}`,
+      done: p.done,
+    };
+  };
+  const parts: ShortPart[] = [];
+  if (e.months) parts.push(part(e.months, "months"));
+  if (e.km) parts.push(part(e.km, "km"));
+  const times = (n: number) => `${n} ${n === 1 ? "gång" : "gånger"}`;
+  let choice: string | null = null;
+  if (e.basis === "equal") {
+    choice = `Lika många gånger (${times(e.months!.done!)}), det räcker att en träffar`;
+  } else if (e.basis === "months") {
+    choice = `Gå på år: genomförd ${times(e.months!.done!)} mot km ${times(e.km!.done!)}`;
+  } else if (e.basis === "km") {
+    choice = `Gå på km: genomförd ${times(e.km!.done!)} mot år ${times(e.months!.done!)}`;
+  }
+  return { parts, choice };
+}
