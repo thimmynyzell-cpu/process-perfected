@@ -13,7 +13,9 @@ import {
   evaluateService,
   isHalfYear,
   formatAge,
+  formatKmInput,
   kmRule,
+  kmSuggestion,
   manualBasis,
   manualHits,
   normalizeInterval,
@@ -110,18 +112,38 @@ function Tick({ on }: { on: boolean }) {
   );
 }
 
+// Sätter mellanslag i stora km-tal medan man skriver (90 000). Värdet skrivs in i fältet
+// direkt med markören kvar på samma siffra, så att React inte flyttar den till slutet.
+function formatKmField(el: HTMLInputElement): string {
+  const caret = el.selectionStart ?? el.value.length;
+  const digitsBefore = el.value.slice(0, caret).replace(/\s/g, "").length;
+  const next = formatKmInput(el.value);
+  if (next !== el.value) {
+    let pos = 0;
+    for (let seen = 0; pos < next.length && seen < digitsBefore; pos++) {
+      if (!/\s/.test(next[pos]!)) seen++;
+    }
+    el.value = next;
+    el.setSelectionRange(pos, pos);
+  }
+  return next;
+}
+
 function NumField({
   id,
   label,
   placeholder,
   value,
   onChange,
+  km = false,
 }: {
   id: string;
   label: string;
   placeholder: string;
   value: string;
   onChange: (text: string) => void;
+  // Km-fält får mellanslag i stora tal.
+  km?: boolean;
 }) {
   return (
     <div className="space-y-1">
@@ -134,7 +156,7 @@ function NumField({
         className="h-9 max-w-32 rounded-full border-[1.5px] border-foreground/25 bg-background px-3.5 text-sm font-medium placeholder:text-muted-foreground/60 hover:border-foreground/40"
         inputMode="numeric"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => onChange(km ? formatKmField(e.target) : e.target.value)}
       />
     </div>
   );
@@ -252,6 +274,7 @@ function ServicePage() {
   const [yearText, setYearText] = useState("");
   const [pick, setPick] = useState<number | null>(null);
   const [km, setKm] = useState("");
+  const [kmFocused, setKmFocused] = useState(false);
   const [manuals, setManuals] = useState<ManualText[]>([blankManual(1)]);
   const [serviceText, setServiceText] = useState("");
   // Fritext är förvalt; bara det valda sättet att lägga in intervall visas.
@@ -297,6 +320,7 @@ function ServicePage() {
   const year =
     value === null ? null : pick !== null && choices.includes(pick) ? pick : monthsToYear(value);
   const kmValue = parse(km);
+  const kmHint = kmSuggestion(km);
   const ctx = { year, km: kmValue };
   const services = parseServiceText(serviceText).map((s) => ({ s, e: evaluateService(s, ctx) }));
 
@@ -443,14 +467,42 @@ function ServicePage() {
                 </p>
                 <div className="space-y-1">
                   <Label htmlFor="km">Kilometer</Label>
-                  <Input
-                    id="km"
-                    placeholder="90000"
-                    className="h-9 max-w-32 rounded-full border-[1.5px] border-foreground/25 bg-background px-3.5 text-sm font-medium placeholder:text-muted-foreground/60 hover:border-foreground/40"
-                    inputMode="numeric"
-                    value={km}
-                    onChange={(e) => setKm(e.target.value)}
-                  />
+                  <div className="relative max-w-32">
+                    <Input
+                      id="km"
+                      placeholder="90 000"
+                      className="h-9 rounded-full border-[1.5px] border-foreground/25 bg-background px-3.5 text-sm font-medium tabular-nums placeholder:text-muted-foreground/60 hover:border-foreground/40"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      aria-describedby={kmHint ? "kmHint" : undefined}
+                      value={km}
+                      onFocus={() => setKmFocused(true)}
+                      onBlur={() => setKmFocused(false)}
+                      onChange={(e) => setKm(formatKmField(e.target))}
+                      onKeyDown={(e) => {
+                        // Tab fyller i förslaget (90 blir 90 000); utan förslag fungerar Tab som vanligt.
+                        if (e.key === "Tab" && !e.shiftKey && kmHint) {
+                          e.preventDefault();
+                          setKm(kmHint);
+                        }
+                      }}
+                    />
+                    {kmHint && kmFocused && (
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-y-0 left-0 flex items-center whitespace-pre pl-[calc(0.875rem+1.5px)] text-sm font-medium tabular-nums"
+                      >
+                        <span className="invisible">{km}</span>
+                        <span className="text-muted-foreground/60">{kmHint.slice(km.length)}</span>
+                        <span className="ml-1.5 rounded border border-foreground/20 px-1 text-[0.65rem] leading-4 text-foreground/60">
+                          Tab
+                        </span>
+                      </span>
+                    )}
+                    <span id="kmHint" className="sr-only">
+                      {kmHint ? `Tryck Tab för ${kmHint} km` : ""}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -703,7 +755,8 @@ function ServicePage() {
                           <NumField
                             id={`sk${m.id}`}
                             label="Varje (km)"
-                            placeholder="15000"
+                            km
+                            placeholder="15 000"
                             value={m.simpleKmEvery}
                             onChange={(t) => changeManual(m.id, "simpleKmEvery", t)}
                           />
@@ -746,14 +799,16 @@ function ServicePage() {
                             <NumField
                               id={`kf${m.id}`}
                               label="Första gången (km)"
-                              placeholder="35000"
+                              km
+                              placeholder="35 000"
                               value={m.kmFirst}
                               onChange={(t) => changeManual(m.id, "kmFirst", t)}
                             />
                             <NumField
                               id={`ke${m.id}`}
                               label="Därefter varje (km)"
-                              placeholder="120000"
+                              km
+                              placeholder="120 000"
                               value={m.kmEvery}
                               onChange={(t) => changeManual(m.id, "kmEvery", t)}
                             />

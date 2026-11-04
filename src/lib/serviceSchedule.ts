@@ -452,3 +452,20 @@ export function describeService(
   if (s.warning) lines.push(s.warning);
   return lines;
 }
+
+// ---- Mätarställning i fälten ----
+
+// Mellanslag i stora tal så att de blir lättare att läsa: 90000 visas som "90 000" och
+// 100000 som "100 000", medan 8000 får stå kvar. Annat än siffror lämnas orört.
+export function formatKmInput(text: string): string {
+  const digits = text.replace(/\s/g, "");
+  if (!/^\d+$/.test(digits)) return text;
+  return digits.length >= 5 ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, " ") : digits;
+}
+
+// Förslag medan man skriver mätarställningen: 90 blir 90 000 och 8 blir 8000. Bara för
+// korta tal (1–3 siffror), annars null.
+export function kmSuggestion(text: string): string | null {
+  const digits = text.replace(/\s/g, "");
+  return /^[1-9]\d{0,2}$/.test(digits) ? formatKmInput(`${digits}000`) : null;
+}

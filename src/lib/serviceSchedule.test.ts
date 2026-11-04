@@ -1,5 +1,7 @@
 import {
   ageRule,
+  formatKmInput,
+  kmSuggestion,
   describeService,
   evaluateService,
   parseServiceText,
@@ -387,5 +389,37 @@ Vid 150000 km oberoende av månader och sedan var 90000:e km (0,20 t)`);
       /^Km: träffar mätarställningen: 150\s000 km · 4:e\. Genomförd 4 gånger/,
     );
     expect(lines[2]).toBe("Genomförd flest gånger: år (5 mot 4). Går på år.");
+  });
+});
+
+describe("formatKmInput", () => {
+  it("adds spaces to large numbers only", () => {
+    expect(formatKmInput("90000")).toBe("90 000");
+    expect(formatKmInput("100000")).toBe("100 000");
+    expect(formatKmInput("1234567")).toBe("1 234 567");
+    expect(formatKmInput("8000")).toBe("8000");
+    expect(formatKmInput("90 00")).toBe("9000");
+    expect(formatKmInput("")).toBe("");
+    // annat än siffror rörs inte, t.ex. punkt som tusentalstecken
+    expect(formatKmInput("90.000")).toBe("90.000");
+  });
+
+  it("does not change the number the page counts with", () => {
+    const counted = (t: string) => Number(t.replace(/\s/g, ""));
+    for (const n of [8000, 90_000, 100_000, 155_000, 1_234_567]) {
+      expect(counted(formatKmInput(String(n)))).toBe(n);
+    }
+  });
+});
+
+describe("kmSuggestion", () => {
+  it("suggests thousands for short numbers", () => {
+    expect(kmSuggestion("90")).toBe("90 000");
+    expect(kmSuggestion("150")).toBe("150 000");
+    expect(kmSuggestion("8")).toBe("8000");
+    expect(kmSuggestion("9000")).toBeNull();
+    expect(kmSuggestion("0")).toBeNull();
+    expect(kmSuggestion("")).toBeNull();
+    expect(kmSuggestion("9,5")).toBeNull();
   });
 });
