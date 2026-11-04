@@ -558,14 +558,14 @@ function ServicePage() {
           </div>
         </div>
 
-        <section className="mt-8 space-y-3">
-          <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-foreground/90">
+        <section className="mt-10 space-y-4">
+          <h2 className="text-center text-2xl font-bold tracking-tight text-primary">
             Lägg in intervall
           </h2>
           <div
             role="group"
             aria-label="Lägg in intervall som"
-            className="inline-flex gap-0.5 rounded-full bg-muted p-1"
+            className="mx-auto flex w-fit gap-1 rounded-full bg-muted p-1.5"
           >
             {(
               [
@@ -580,17 +580,17 @@ function ServicePage() {
                 onClick={() => setMode(value)}
                 className={
                   mode === value
-                    ? "inline-flex items-center gap-1.5 rounded-full bg-background px-4 py-1.5 text-sm font-semibold text-primary shadow-sm"
-                    : "inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium text-foreground/70 hover:text-foreground"
+                    ? "inline-flex items-center gap-2 rounded-full bg-background px-6 py-2.5 text-base font-semibold text-primary shadow-sm"
+                    : "inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-base font-medium text-foreground/70 hover:text-foreground"
                 }
               >
-                <Icon className="size-4" /> {label}
+                <Icon className="size-5" /> {label}
               </button>
             ))}
           </div>
           {mode === "text" ? (
             <div className="space-y-3">
-              <p className="text-sm text-foreground/75">
+              <p className="mx-auto max-w-prose text-center text-sm text-foreground/75">
                 Klistra in tilläggsservicen från bokningssidan, en per rad. Sidan räknar ut vilka
                 som ska med utifrån ålder och mätarställning överst, med samma regler som Manuellt.
                 Tiden inom parentes, till exempel (0,10 t), räknas inte.
@@ -655,7 +655,7 @@ function ServicePage() {
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-sm text-foreground/75">
+              <p className="mx-auto max-w-prose text-center text-sm text-foreground/75">
                 Har intervallet både månader och km visas vilket som genomförts flest gånger, och
                 det är det du ska gå på.
               </p>
