@@ -647,3 +647,100 @@ export function compareVin(customer: string, upTo: string, from: string): VinRes
   }
   return { customer: c, upTo: u, from: f, choice, warnings };
 }
+
+// ---- Välj servicetyp efter VIN ----
+// Rader som "-VIN 3MD...200018 eller MMZ...300200, fasta serviceintervaller (normala
+// förhållanden)". Ett streck före VIN betyder upp till och med, ett streck efter numret
+// från och med, och "200019-200100" ett intervall. Tillverkarkoden (3MD) är VIN:s första
+// tre tecken och numret jämförs med lika många siffror i slutet av kundens VIN.
+
+export type VinRange = { prefix: string; from: number | null; to: number | null; digits: number };
+
+export type ServiceType = {
+  text: string;
+  ranges: VinRange[];
+  // Fasta serviceintervaller under normala förhållanden, det som alltid ska väljas.
+  preferred: boolean;
+};
+
+export function parseServiceTypes(input: string): ServiceType[] {
+  const out: ServiceType[] = [];
+  for (const raw of input.split(/\r?\n/)) {
+    const line = raw
+      .replace(/^[\s○●◯◉•*]+/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!/\.\.|…/.test(line) || !/\d/.test(line)) continue;
+    const upToAll = /^[-–]/.test(line);
+    const ranges: VinRange[] = [];
+    const spec = /([A-Z0-9]{3})\s*(?:\.{2,}|…)\s*(\d{3,8})(?:\s*[-–]\s*(\d{3,8})|\s*([-–]))?/gi;
+    for (const m of line.matchAll(spec)) {
+      const n = Number(m[2]);
+      const digits = m[2]!.length;
+      let range: VinRange;
+      if (m[3]) range = { prefix: m[1]!.toUpperCase(), from: n, to: Number(m[3]), digits };
+      else if (m[4]) range = { prefix: m[1]!.toUpperCase(), from: n, to: null, digits };
+      else if (upToAll) range = { prefix: m[1]!.toUpperCase(), from: null, to: n, digits };
+      else range = { prefix: m[1]!.toUpperCase(), from: n, to: n, digits };
+      ranges.push(range);
+    }
+    if (!ranges.length) continue;
+    const kind = line.slice(line.lastIndexOf(",") + 1).toLowerCase();
+    out.push({ text: line, ranges, preferred: /fast/.test(kind) && /normal/.test(kind) });
+  }
+  return out;
+}
+
+export type ServiceTypeEval = {
+  // Null när kundens VIN saknas eller inte går att läsa.
+  vinMatch: boolean | null;
+  // Det intervall som passade, eller varför inget gjorde det.
+  reason: string;
+  chosen: boolean;
+};
+
+export function evaluateServiceTypes(
+  items: ServiceType[],
+  vin: string,
+): { results: ServiceTypeEval[]; chosen: number | null } {
+  const clean = vin.toUpperCase().replace(/[\s-]/g, "");
+  const ok = /^[A-Z0-9]{3}.*\d{3,}$/.test(clean);
+  const results = items.map((t): ServiceTypeEval => {
+    if (!ok) return { vinMatch: null, reason: "Fyll i kundens VIN", chosen: false };
+    const sameMaker = t.ranges.filter((r) => clean.startsWith(r.prefix));
+    if (!sameMaker.length) {
+      return {
+        vinMatch: false,
+        reason: `Gäller ${t.ranges.map((r) => r.prefix).join(" och ")}, inte ${clean.slice(0, 3)}`,
+        chosen: false,
+      };
+    }
+    for (const r of sameMaker) {
+      const serial = Number(clean.slice(-r.digits));
+      if ((r.from === null || serial >= r.from) && (r.to === null || serial <= r.to)) {
+        const limit =
+          r.from !== null && r.to !== null && r.from !== r.to
+            ? `${r.from}–${r.to}`
+            : r.to !== null && r.from === null
+              ? `upp till ${r.to}`
+              : r.from !== null && r.to === null
+                ? `från ${r.from}`
+                : `${r.from}`;
+        return { vinMatch: true, reason: `${r.prefix} ${serial}: ${limit}`, chosen: false };
+      }
+    }
+    const r = sameMaker[0]!;
+    const serial = Number(clean.slice(-r.digits));
+    return {
+      vinMatch: false,
+      reason:
+        r.to !== null && serial > r.to
+          ? `${r.prefix} ${serial} är efter ${r.to}`
+          : `${r.prefix} ${serial} är före ${r.from}`,
+      chosen: false,
+    };
+  });
+  const chosen = items.findIndex((t, i) => t.preferred && results[i]!.vinMatch === true);
+  if (chosen >= 0) results[chosen]!.chosen = true;
+  return { results, chosen: chosen >= 0 ? chosen : null };
+}

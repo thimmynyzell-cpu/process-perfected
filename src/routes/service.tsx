@@ -12,6 +12,7 @@ import {
   compareVin,
   describeService,
   evaluateService,
+  evaluateServiceTypes,
   findMercedesCodes,
   MERCEDES_CODES,
   isHalfYear,
@@ -27,6 +28,7 @@ import {
   occurrenceNumber,
   ordinal,
   parseServiceText,
+  parseServiceTypes,
   ruleHits,
   summarizeService,
   surroundingOccurrences,
@@ -395,6 +397,75 @@ function Why({ e }: { e: ServiceEval }) {
   );
 }
 
+// Listan "Välj servicetyp" som på bokningssidan, med den rad som ska väljas markerad och
+// en kort förklaring till höger.
+function ServiceTypePanel({
+  types,
+  results,
+}: {
+  types: ReturnType<typeof parseServiceTypes>;
+  results: ReturnType<typeof evaluateServiceTypes>["results"];
+}) {
+  return (
+    <div
+      className="rounded-[4px] border border-[#e3e3e3] bg-white px-5 pb-5 pt-4 text-[#1b1b1b] shadow-sm"
+      style={{ fontFamily: "Roboto, Arial, sans-serif" }}
+    >
+      <p className="mb-3 font-bold text-[#111]">Välj servicetyp</p>
+      <ul className="space-y-2">
+        {types.map((t, i) => {
+          const res = results[i]!;
+          return (
+            <li
+              key={i}
+              className={
+                res.chosen
+                  ? "grid gap-x-8 gap-y-1 rounded bg-[#fff6b8] px-1.5 py-1 sm:grid-cols-[minmax(0,1fr)_minmax(180px,40%)]"
+                  : "grid gap-x-8 gap-y-1 px-1.5 py-1 sm:grid-cols-[minmax(0,1fr)_minmax(180px,40%)]"
+              }
+            >
+              <div className="flex items-start gap-2 text-[15px] leading-snug">
+                <span
+                  role="img"
+                  aria-label={res.chosen ? "Välj den här" : "Välj inte"}
+                  className={
+                    res.chosen
+                      ? "mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border-[3px] border-[#1b1b1b] bg-white"
+                      : "mt-0.5 size-4 shrink-0 rounded-full border-[3px] border-[#8a8a8a] bg-white"
+                  }
+                >
+                  {res.chosen && <span className="size-1.5 rounded-full bg-[#1b1b1b]" />}
+                </span>
+                <span className={res.chosen ? "font-semibold" : ""}>{t.text}</span>
+              </div>
+              <div className="flex flex-wrap items-start gap-1.5 font-sans">
+                <span
+                  className={
+                    res.vinMatch
+                      ? "rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary"
+                      : "rounded-full bg-[#efefef] px-2 py-0.5 text-xs font-medium text-[#555]"
+                  }
+                >
+                  VIN {res.vinMatch ? "✓" : res.vinMatch === null ? "?" : "✗"} {res.reason}
+                </span>
+                <span
+                  className={
+                    t.preferred
+                      ? "rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary"
+                      : "rounded-full bg-[#efefef] px-2 py-0.5 text-xs font-medium text-[#555]"
+                  }
+                >
+                  {t.preferred ? "Fast, normala ✓" : "Typ ✗"}
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 // VIN-räknare: kundens VIN jämförs med "upp till och med" och "från och med" (löpnumret,
 // VIN:s sista 6 siffror), och räknaren säger vilket alternativ som gäller.
 function VinCalculator() {
@@ -403,6 +474,13 @@ function VinCalculator() {
   const [upToNote, setUpToNote] = useState("");
   const [from, setFrom] = useState("");
   const [fromNote, setFromNote] = useState("");
+  const [typesText, setTypesText] = useState("");
+  const typesRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (typesRef.current) growToFit(typesRef.current);
+  }, [typesText]);
+  const types = parseServiceTypes(typesText);
+  const typeEval = evaluateServiceTypes(types, vin);
   const r = compareVin(vin, upTo, from);
   const field =
     "h-9 rounded-full border-[1.5px] border-foreground/25 bg-background px-3.5 text-sm font-medium placeholder:font-normal placeholder:text-muted-foreground/60 hover:border-foreground/40";
@@ -437,6 +515,41 @@ function VinCalculator() {
             className={vinField}
           />
         </div>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <Label htmlFor="vin-types" className="text-base font-semibold">
+              Klistra in servicetyperna
+            </Label>
+            <button
+              type="button"
+              onClick={() => setTypesText("")}
+              className="rounded px-2 py-1 text-sm text-foreground/75 hover:bg-accent"
+            >
+              Rensa
+            </button>
+          </div>
+          <Textarea
+            ref={typesRef}
+            id="vin-types"
+            rows={2}
+            spellCheck={false}
+            value={typesText}
+            onChange={(e) => setTypesText(e.target.value)}
+            placeholder={
+              "t.ex. -VIN 3MD...200018 eller MMZ...300200, fasta serviceintervaller (under normala förhållanden)\nVIN 3MD...200019- eller MMZ...300201-, fasta serviceintervaller (normala förhållanden)"
+            }
+            className="min-h-0 resize-none overflow-hidden rounded-xl border-[1.5px] border-foreground/25 bg-background text-sm placeholder:text-muted-foreground/60"
+          />
+        </div>
+        {types.length > 0 && <ServiceTypePanel types={types} results={typeEval.results} />}
+        {types.length > 0 && typeEval.chosen === null && vin.trim() !== "" && (
+          <p className="text-sm font-medium text-amber-700">
+            Ingen rad med fasta serviceintervaller (normala förhållanden) passar kundens VIN.
+          </p>
+        )}
+        <p className="pt-2 text-sm font-semibold text-foreground/80">
+          Eller skriv in gränserna själv
+        </p>
         <div className="grid gap-4 sm:grid-cols-2">
           {sides.map(([k, label, value, setValue, noteValue, setNote, ph]) => (
             <div key={k} className="space-y-2 rounded-xl border bg-muted/30 p-3">

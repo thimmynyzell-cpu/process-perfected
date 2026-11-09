@@ -1,5 +1,7 @@
 import {
   ageRule,
+  evaluateServiceTypes,
+  parseServiceTypes,
   compareVin,
   readVin,
   summarizeService,
@@ -517,5 +519,43 @@ describe("compareVin", () => {
     expect(compareVin(vin, "130000", "110000").choice).toBe("both");
     expect(compareVin(vin, "A130000", "").warnings[0]).toMatch(/fabrik A/);
     expect(compareVin("WDD205", "", "").warnings[0]).toMatch(/6 siffror/);
+  });
+});
+
+describe("service types by VIN", () => {
+  const pasted = `Välj servicetyp
+-VIN 3MD...200018 eller MMZ...300200, variabla serviceintervaller
+-VIN 3MD...200018 eller MMZ...300200, fasta serviceintervaller (under normala förhållanden)
+-VIN 3MD...200018 eller MMZ...300200, fasta serviceintervaller (under svåra förhållanden)
+VIN 3MD...200019- eller MMZ...300201-, variabla serviceintervaller
+VIN 3MD...200019- eller MMZ...300201-, fasta serviceintervaller (normala förhållanden)
+VIN 3MD...200019- eller MMZ...300201-, fasta serviceintervaller (under svåra förhållanden)`;
+  const types = parseServiceTypes(pasted);
+
+  it("reads up-to and from limits per maker code", () => {
+    expect(types).toHaveLength(6);
+    expect(types[0]!.ranges).toEqual([
+      { prefix: "3MD", from: null, to: 200018, digits: 6 },
+      { prefix: "MMZ", from: null, to: 300200, digits: 6 },
+    ]);
+    expect(types[3]!.ranges).toEqual([
+      { prefix: "3MD", from: 200019, to: null, digits: 6 },
+      { prefix: "MMZ", from: 300201, to: null, digits: 6 },
+    ]);
+    expect(types.map((t) => t.preferred)).toEqual([false, true, false, false, true, false]);
+  });
+
+  it("chooses fixed intervals under normal conditions for the customer's VIN", () => {
+    expect(evaluateServiceTypes(types, "3MDDJ3LA1KM200018").chosen).toBe(1);
+    expect(evaluateServiceTypes(types, "3MDDJ3LA1KM200019").chosen).toBe(4);
+    expect(evaluateServiceTypes(types, "MMZ1234567H300201").chosen).toBe(4);
+    expect(evaluateServiceTypes(types, "MMZ1234567H300200").chosen).toBe(1);
+  });
+
+  it("chooses nothing for another maker or without a VIN", () => {
+    const other = evaluateServiceTypes(types, "WDD2050421F123456");
+    expect(other.chosen).toBeNull();
+    expect(other.results[0]!.reason).toMatch(/inte WDD/);
+    expect(evaluateServiceTypes(types, "").results[0]!.vinMatch).toBeNull();
   });
 });
