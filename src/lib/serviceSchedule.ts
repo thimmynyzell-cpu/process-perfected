@@ -584,3 +584,66 @@ export function summarizeService(e: ServiceEval): { parts: ShortPart[]; choice: 
   }
   return { parts, choice };
 }
+
+// ---- VIN-räknare ----
+// Jämför kundens VIN med en gräns "upp till och med" och/eller "från och med". Det som
+// jämförs är löpnumret, VIN:s sista 6 siffror. Gränsen kan skrivas som helt VIN eller
+// bara slutnumret (t.ex. "A123456" eller "123456").
+
+export type VinInfo = {
+  clean: string;
+  serial: number;
+  // Fabriksbokstaven före löpnumret (position 11 i ett helt VIN), om den finns.
+  plant: string | null;
+};
+
+export function readVin(text: string): VinInfo | null {
+  const clean = text.toUpperCase().replace(/[\s-]/g, "");
+  const m = /([A-Z0-9])?(\d{6})$/.exec(clean);
+  if (!m) return null;
+  const plant = m[1] && /[A-Z]/.test(m[1]) ? m[1] : null;
+  return { clean, serial: Number(m[2]), plant };
+}
+
+export type VinResult = {
+  customer: VinInfo | null;
+  upTo: (VinInfo & { applies: boolean }) | null;
+  from: (VinInfo & { applies: boolean }) | null;
+  // Vilket alternativ som gäller; "both" eller "none" betyder att gränserna behöver ses över.
+  choice: "upTo" | "from" | "both" | "none" | null;
+  warnings: string[];
+};
+
+export function compareVin(customer: string, upTo: string, from: string): VinResult {
+  const c = readVin(customer);
+  const warnings: string[] = [];
+  if (customer.trim() && !c) warnings.push("Kundens VIN måste sluta med 6 siffror.");
+  if (c && c.clean.length !== 17)
+    warnings.push(`Kundens VIN har ${c.clean.length} tecken, ett helt VIN har 17.`);
+  if (c && /[IOQ]/.test(c.clean))
+    warnings.push("VIN innehåller I, O eller Q, som inte används i VIN.");
+
+  const side = (text: string, label: string, applies: (cs: number, s: number) => boolean) => {
+    if (!text.trim()) return null;
+    const v = readVin(text);
+    if (!v) {
+      warnings.push(`"${label}" måste sluta med 6 siffror.`);
+      return null;
+    }
+    if (c && v.plant && c.plant && v.plant !== c.plant) {
+      warnings.push(`"${label}" gäller fabrik ${v.plant}, kundens bil är från fabrik ${c.plant}.`);
+    }
+    return { ...v, applies: c ? applies(c.serial, v.serial) : false };
+  };
+  const u = side(upTo, "Upp till och med", (cs, s) => cs <= s);
+  const f = side(from, "Från och med", (cs, s) => cs >= s);
+
+  let choice: VinResult["choice"] = null;
+  if (c && (u || f)) {
+    if (u?.applies && f?.applies) choice = "both";
+    else if (u?.applies) choice = "upTo";
+    else if (f?.applies) choice = "from";
+    else choice = "none";
+  }
+  return { customer: c, upTo: u, from: f, choice, warnings };
+}

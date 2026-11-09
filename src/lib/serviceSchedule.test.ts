@@ -1,5 +1,7 @@
 import {
   ageRule,
+  compareVin,
+  readVin,
   summarizeService,
   findMercedesCodes,
   formatKmInput,
@@ -485,5 +487,35 @@ Vid 105000 km eller 72 månader och sedan var 15000:e km eller 12:e månad (0,10
   it("marks parts it cannot decide", () => {
     const r = summarizeService(evaluateService(dual!, { year: null, km: 200_000 }));
     expect(r.parts.map((p) => p.hit)).toEqual([null, true]);
+  });
+});
+
+describe("compareVin", () => {
+  const vin = "WDD2050421F123456";
+
+  it("reads the serial number at the end", () => {
+    expect(readVin(vin)).toEqual({ clean: vin, serial: 123456, plant: "F" });
+    expect(readVin("a 120000")).toEqual({ clean: "A120000", serial: 120000, plant: "A" });
+    expect(readVin("ABC")).toBeNull();
+  });
+
+  it("chooses from-and-including when the car is newer than the limit", () => {
+    const r = compareVin(vin, "F120000", "F120001");
+    expect(r.choice).toBe("from");
+    expect(r.upTo!.applies).toBe(false);
+    expect(r.from!.applies).toBe(true);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it("chooses up-to when the car is older, limits included", () => {
+    expect(compareVin(vin, "123456", "123457").choice).toBe("upTo");
+    expect(compareVin(vin, "", "123456").choice).toBe("from");
+    expect(compareVin(vin, "123455", "").choice).toBe("none");
+  });
+
+  it("flags limits that overlap and other plants", () => {
+    expect(compareVin(vin, "130000", "110000").choice).toBe("both");
+    expect(compareVin(vin, "A130000", "").warnings[0]).toMatch(/fabrik A/);
+    expect(compareVin("WDD205", "", "").warnings[0]).toMatch(/6 siffror/);
   });
 });

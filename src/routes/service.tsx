@@ -9,6 +9,7 @@ import {
   EXTRA_SERVICES,
   KM_INTERVALS,
   ageRule,
+  compareVin,
   describeService,
   evaluateService,
   findMercedesCodes,
@@ -394,6 +395,132 @@ function Why({ e }: { e: ServiceEval }) {
   );
 }
 
+// VIN-räknare: kundens VIN jämförs med "upp till och med" och "från och med" (löpnumret,
+// VIN:s sista 6 siffror), och räknaren säger vilket alternativ som gäller.
+function VinCalculator() {
+  const [vin, setVin] = useState("");
+  const [upTo, setUpTo] = useState("");
+  const [upToNote, setUpToNote] = useState("");
+  const [from, setFrom] = useState("");
+  const [fromNote, setFromNote] = useState("");
+  const r = compareVin(vin, upTo, from);
+  const field =
+    "h-9 rounded-full border-[1.5px] border-foreground/25 bg-background px-3.5 text-sm font-medium placeholder:font-normal placeholder:text-muted-foreground/60 hover:border-foreground/40";
+  const vinField = `${field} max-w-64 font-mono uppercase tracking-wide placeholder:normal-case placeholder:tracking-normal`;
+  const sides = [
+    ["upTo", "Upp till och med", upTo, setUpTo, upToNote, setUpToNote, "t.ex. F120000"],
+    ["from", "Från och med", from, setFrom, fromNote, setFromNote, "t.ex. F120001"],
+  ] as const;
+  const note = (k: "upTo" | "from") => (k === "upTo" ? upToNote : fromNote).trim();
+  const fmtSerial = (n: number) => String(n).padStart(6, "0");
+
+  return (
+    <section className="mt-10 space-y-4">
+      <h2 className="text-center text-2xl font-bold tracking-tight text-primary">VIN-räknare</h2>
+      <p className="mx-auto max-w-prose text-center text-sm text-foreground/75">
+        Skriv in kundens VIN och gränsen från servicehäftet eller bulletinen. Räknaren jämför
+        löpnumret, VIN:s sista 6 siffror, och visar vilket alternativ du ska gå efter.
+      </p>
+      <div className="space-y-4 rounded-2xl border bg-card px-4 py-3.5 shadow-sm">
+        <div className="space-y-1">
+          <Label htmlFor="vin" className="text-base font-semibold">
+            Kundens VIN
+          </Label>
+          <Input
+            id="vin"
+            value={vin}
+            maxLength={20}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="t.ex. WDD2050421F123456"
+            onChange={(e) => setVin(e.target.value)}
+            className={vinField}
+          />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {sides.map(([k, label, value, setValue, noteValue, setNote, ph]) => (
+            <div key={k} className="space-y-2 rounded-xl border bg-muted/30 p-3">
+              <Label htmlFor={`vin-${k}`} className="text-base font-semibold">
+                {label}
+              </Label>
+              <Input
+                id={`vin-${k}`}
+                value={value}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={ph}
+                onChange={(e) => setValue(e.target.value)}
+                className={vinField}
+              />
+              <Label htmlFor={`vin-${k}-note`} className="block text-[0.8rem] text-foreground">
+                Det här gäller då (valfritt)
+              </Label>
+              <Input
+                id={`vin-${k}-note`}
+                value={noteValue}
+                autoComplete="off"
+                placeholder="t.ex. Var 30000:e km"
+                onChange={(e) => setNote(e.target.value)}
+                className={`${field} w-full`}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {r.choice && (
+        <div
+          className={
+            r.choice === "upTo" || r.choice === "from"
+              ? "rounded-2xl border-2 border-primary bg-primary/5 px-4 py-3.5"
+              : "rounded-2xl border-2 border-amber-500 bg-amber-500/10 px-4 py-3.5"
+          }
+        >
+          <p className="text-lg font-bold">
+            {r.choice === "upTo" && <>Gå efter: Upp till och med</>}
+            {r.choice === "from" && <>Gå efter: Från och med</>}
+            {r.choice === "both" && <>Båda gränserna passar – kontrollera dem</>}
+            {r.choice === "none" && <>Ingen av gränserna passar</>}
+          </p>
+          {(r.choice === "upTo" || r.choice === "from") && note(r.choice) && (
+            <p className="mt-1 font-semibold text-primary">{note(r.choice)}</p>
+          )}
+          <ul className="mt-2 space-y-1 text-sm text-foreground/80">
+            <li>
+              Kundens löpnummer:{" "}
+              <span className="font-mono font-semibold text-foreground">
+                {r.customer!.plant ?? ""}
+                {fmtSerial(r.customer!.serial)}
+              </span>
+            </li>
+            {r.upTo && (
+              <li>
+                {r.upTo.applies ? "✓" : "✗"} Upp till och med {r.upTo.plant ?? ""}
+                {fmtSerial(r.upTo.serial)}:{" "}
+                {r.upTo.applies ? "kundens nummer är lika eller lägre" : "kundens nummer är högre"}
+              </li>
+            )}
+            {r.from && (
+              <li>
+                {r.from.applies ? "✓" : "✗"} Från och med {r.from.plant ?? ""}
+                {fmtSerial(r.from.serial)}:{" "}
+                {r.from.applies ? "kundens nummer är lika eller högre" : "kundens nummer är lägre"}
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+      {r.warnings.length > 0 && (
+        <ul className="space-y-1 text-sm font-medium text-amber-700">
+          {r.warnings.map((w) => (
+            <li key={w}>{w}</li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function ServicePage() {
   const [months, setMonths] = useState("");
   const [yearText, setYearText] = useState("");
@@ -405,6 +532,8 @@ function ServicePage() {
   // Fritext är förvalt; bara det valda sättet att lägga in intervall visas.
   const [mode, setMode] = useState<"text" | "manual" | "mercedes">("text");
   const [mbQuery, setMbQuery] = useState("");
+  // Rensa nollställer VIN-räknaren genom att byta nyckel.
+  const [vinKey, setVinKey] = useState(0);
   const serviceRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (serviceRef.current) growToFit(serviceRef.current);
@@ -436,6 +565,7 @@ function ServicePage() {
     setNextId(nextId + 1);
     setServiceText("");
     setMbQuery("");
+    setVinKey(vinKey + 1);
   }
   function addManual() {
     setManuals([...manuals, blankManual(nextId)]);
@@ -1043,6 +1173,7 @@ function ServicePage() {
             </div>
           )}
         </section>
+        <VinCalculator key={vinKey} />
       </main>
     </div>
   );
