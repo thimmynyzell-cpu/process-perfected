@@ -642,6 +642,10 @@ function ServicePage() {
   const [kmFocused, setKmFocused] = useState(false);
   const [manuals, setManuals] = useState<ManualText[]>([blankManual(1)]);
   const [serviceText, setServiceText] = useState("");
+  // Ålder och mätarställning när listan klistrades in. Ändras ett värde som redan var ifyllt
+  // då töms listan, så att man inte räknar på en lista från en annan bil.
+  const [pastedFor, setPastedFor] = useState<{ months: string; km: string } | null>(null);
+  const [listCleared, setListCleared] = useState(false);
   // Fritext är förvalt; bara det valda sättet att lägga in intervall visas.
   const [mode, setMode] = useState<"text" | "manual" | "mercedes">("text");
   const [mbQuery, setMbQuery] = useState("");
@@ -653,17 +657,45 @@ function ServicePage() {
   }, [serviceText, mode]);
   const [nextId, setNextId] = useState(2);
 
+  function pasteServiceText(text: string) {
+    setServiceText(text);
+    setPastedFor(text.trim() ? { months, km } : null);
+    setListCleared(false);
+  }
+  function clearListIfChanged(nextMonths: string, nextKm: string) {
+    if (!pastedFor || !serviceText.trim()) return;
+    const digits = (t: string) => t.replace(/\s/g, "");
+    const changed = (before: string, now: string) =>
+      digits(before) !== "" && digits(before) !== digits(now);
+    if (changed(pastedFor.months, nextMonths) || changed(pastedFor.km, nextKm)) {
+      setServiceText("");
+      setPastedFor(null);
+      setListCleared(true);
+    }
+  }
+  function changeKm(text: string) {
+    setKm(text);
+    clearListIfChanged(months, text);
+  }
+  // Klistrades listan in innan ålder eller km fylldes i hör den till de värden man skriver
+  // in efteråt; de tas över när man lämnar fältet.
+  function adoptVehicleValues() {
+    setPastedFor((p) => p && { months: p.months || months, km: p.km || km });
+  }
   // Månader och år hänger ihop: ändrar man det ena uppdateras det andra.
   function changeMonths(text: string) {
     const m = parse(text);
+    clearListIfChanged(text, km);
     setMonths(text);
     setYearText(m === null ? "" : String(monthsToYear(m)));
     setPick(null);
   }
   function changeYear(text: string) {
     const y = parse(text, false);
+    const nextMonths = y === null ? "" : String(Math.round(y * 12));
+    clearListIfChanged(nextMonths, km);
     setYearText(text);
-    setMonths(y === null ? "" : String(Math.round(y * 12)));
+    setMonths(nextMonths);
     setPick(null);
   }
   function changeManual(id: number, field: keyof Omit<ManualText, "id">, text: string) {
@@ -677,6 +709,8 @@ function ServicePage() {
     setManuals([blankManual(nextId)]);
     setNextId(nextId + 1);
     setServiceText("");
+    setPastedFor(null);
+    setListCleared(false);
     setMbQuery("");
     setVinKey(vinKey + 1);
   }
@@ -809,6 +843,7 @@ function ServicePage() {
                     <Label htmlFor="months">Antal månader</Label>
                     <Input
                       id="months"
+                      onBlur={adoptVehicleValues}
                       placeholder="t.ex. 120"
                       className="h-9 max-w-32 rounded-full border-[1.5px] border-foreground/25 bg-background px-3.5 text-sm font-medium placeholder:text-muted-foreground/60 hover:border-foreground/40"
                       inputMode="numeric"
@@ -821,6 +856,7 @@ function ServicePage() {
                     <Label htmlFor="year">eller år</Label>
                     <Input
                       id="year"
+                      onBlur={adoptVehicleValues}
                       placeholder="t.ex. 10"
                       className="h-9 max-w-32 rounded-full border-[1.5px] border-foreground/25 bg-background px-3.5 text-sm font-medium placeholder:text-muted-foreground/60 hover:border-foreground/40"
                       inputMode="decimal"
@@ -847,13 +883,16 @@ function ServicePage() {
                       aria-describedby={kmHint ? "kmHint" : undefined}
                       value={km}
                       onFocus={() => setKmFocused(true)}
-                      onBlur={() => setKmFocused(false)}
-                      onChange={(e) => setKm(formatKmField(e.target))}
+                      onBlur={() => {
+                        setKmFocused(false);
+                        adoptVehicleValues();
+                      }}
+                      onChange={(e) => changeKm(formatKmField(e.target))}
                       onKeyDown={(e) => {
                         // Tab fyller i förslaget (90 blir 90 000); utan förslag fungerar Tab som vanligt.
                         if (e.key === "Tab" && !e.shiftKey && kmHint) {
                           e.preventDefault();
-                          setKm(kmHint);
+                          changeKm(kmHint);
                         }
                       }}
                     />
@@ -1004,7 +1043,7 @@ function ServicePage() {
                   </Label>
                   <button
                     type="button"
-                    onClick={() => setServiceText("")}
+                    onClick={() => pasteServiceText("")}
                     className="rounded px-2 py-1 text-sm text-foreground/75 hover:bg-accent"
                   >
                     Rensa
@@ -1015,13 +1054,19 @@ function ServicePage() {
                   id="serviceText"
                   rows={2}
                   value={serviceText}
-                  onChange={(e) => setServiceText(e.target.value)}
+                  onChange={(e) => pasteServiceText(e.target.value)}
                   placeholder={
                     "t.ex. Var 30000:e km oberoende av månader (0,10 t)\nVid 105000 km eller 72 månader och sedan var 15000:e km eller 12:e månad (0,10 t)"
                   }
                   className="mt-2 min-h-0 resize-none overflow-hidden rounded-xl border-[1.5px] border-foreground/25 bg-background text-sm placeholder:text-muted-foreground/60"
                 />
               </div>
+              {listCleared && (
+                <p className="text-sm font-medium text-amber-700">
+                  Listan tömdes eftersom ålder eller mätarställning ändrades. Klistra in listan för
+                  den nya bilen.
+                </p>
+              )}
               {services.length > 0 && (
                 <>
                   {services.some(({ s, e }) => e.include === null && (s.months || s.km)) && (
