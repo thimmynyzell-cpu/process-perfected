@@ -179,13 +179,37 @@ export function timesDone(first: number, every: number | null, upTo: number): nu
 export function manualBasis(
   m: Manual,
   ctx: { year: number | null; km: number | null },
-): { months: number; km: number; choice: "months" | "km" | "equal" } | null {
+): {
+  months: number;
+  km: number;
+  choice: "months" | "km" | "equal";
+  equalText: string | null;
+} | null {
   const mo = normalizeInterval(m.monthFirst, m.monthEvery);
   const k = normalizeInterval(m.kmFirst, m.kmEvery);
   if (mo === null || k === null || ctx.year === null || ctx.km === null) return null;
   const months = timesDone(mo.first, mo.every, ctx.year * 12);
   const km = timesDone(k.first, k.every, ctx.km);
-  return { months, km, choice: months === km ? "equal" : months > km ? "months" : "km" };
+  const choice = months === km ? "equal" : months > km ? "months" : "km";
+  return {
+    months,
+    km,
+    choice,
+    equalText: choice === "equal" ? equalBasisText(months, mo.first, mo.every) : null,
+  };
+}
+
+// Text när år och km är genomförda lika många gånger. Har båda genomförts minst en gång bör
+// servicen redan vara gjord vid det senaste tillfället på år (det som kom först gäller).
+export function equalBasisText(
+  done: number,
+  monthsFirst: number,
+  monthsEvery: number | null,
+): string {
+  const times = `${done} ${done === 1 ? "gång" : "gånger"}`;
+  if (done === 0) return "Inte genomförd än på år eller km, det räcker att en träffar";
+  const last = monthsEvery === null ? monthsFirst : monthsFirst + (done - 1) * monthsEvery;
+  return `${times} på km och ${times} på år – bör redan vara bytt år ${Math.ceil(last / 12)} (${last} mån)`;
 }
 
 // Senaste tillfället som har passerat (<= at) och nästa som kommer (> at), eller null
@@ -437,7 +461,7 @@ export function describeService(
   if (e.km) part(e.km, "Km", "km", ctx.km, "mätarställningen");
   if (e.basis === "equal") {
     lines.push(
-      `Lika många gånger på år och km (${e.months!.done}). Tas med om något av dem träffar.`,
+      `${equalBasisText(e.months!.done!, e.months!.first, e.months!.every)}. Tas med om något av dem träffar.`,
     );
   } else if (e.basis) {
     const [a, b] =
@@ -576,7 +600,7 @@ export function summarizeService(e: ServiceEval): { parts: ShortPart[]; choice: 
   const times = (n: number) => `${n} ${n === 1 ? "gång" : "gånger"}`;
   let choice: string | null = null;
   if (e.basis === "equal") {
-    choice = `Lika många gånger (${times(e.months!.done!)}), det räcker att en träffar`;
+    choice = equalBasisText(e.months!.done!, e.months!.first, e.months!.every);
   } else if (e.basis === "months") {
     choice = `Gå på år: genomförd ${times(e.months!.done!)} mot km ${times(e.km!.done!)}`;
   } else if (e.basis === "km") {

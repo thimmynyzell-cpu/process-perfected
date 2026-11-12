@@ -198,7 +198,7 @@ function ManualResultView({ result }: { result: ManualResult }) {
         <p className="mt-3 rounded-xl bg-primary/10 px-3 py-2 text-sm font-semibold">
           Genomförd flest gånger:{" "}
           {basis.choice === "equal"
-            ? `lika många (${basis.months} gånger på år och km). Välj själv.`
+            ? `${basis.equalText}.`
             : `${basis.choice === "months" ? "år" : "kilometer"} (${
                 basis.choice === "months" ? basis.months : basis.km
               } mot ${basis.choice === "months" ? basis.km : basis.months} gånger). Gå på ${

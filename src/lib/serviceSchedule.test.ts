@@ -1,5 +1,6 @@
 import {
   ageRule,
+  equalBasisText,
   evaluateServiceTypes,
   parseServiceTypes,
   compareVin,
@@ -215,24 +216,24 @@ describe("manualBasis", () => {
 
   it("picks the part that has been done most times", () => {
     // 3 år = 3 gånger; 30 000 km = 2 gånger
-    expect(manualBasis(manual, { year: 3, km: 30_000 })).toEqual({
+    expect(manualBasis(manual, { year: 3, km: 30_000 })).toMatchObject({
       months: 3,
       km: 2,
       choice: "months",
     });
     // 3 år = 3 gånger; 80 000 km = 5 gånger
-    expect(manualBasis(manual, { year: 3, km: 80_000 })).toEqual({
+    expect(manualBasis(manual, { year: 3, km: 80_000 })).toMatchObject({
       months: 3,
       km: 5,
       choice: "km",
     });
-    expect(manualBasis(manual, { year: 2, km: 30_000 })).toEqual({
+    expect(manualBasis(manual, { year: 2, km: 30_000 })).toMatchObject({
       months: 2,
       km: 2,
       choice: "equal",
     });
     // 29 999 km har inte nått 30 000 km, så bara en gång
-    expect(manualBasis(manual, { year: 2, km: 29_999 })).toEqual({
+    expect(manualBasis(manual, { year: 2, km: 29_999 })).toMatchObject({
       months: 2,
       km: 1,
       choice: "months",
@@ -557,5 +558,21 @@ VIN 3MD...200019- eller MMZ...300201-, fasta serviceintervaller (under svåra f�
     expect(other.chosen).toBeNull();
     expect(other.results[0]!.reason).toMatch(/inte WDD/);
     expect(evaluateServiceTypes(types, "").results[0]!.vinMatch).toBeNull();
+  });
+});
+
+describe("equalBasisText", () => {
+  it("says when it should already have been done", () => {
+    // 100 mån (år 9, 108), var 60:e mån eller 120 000 km: 1 gång var
+    const [line] = parseServiceText("Var 60:e månad eller 120000:e km");
+    const e = evaluateService(line!, { year: 9, km: 125_000 });
+    expect(e.basis).toBe("equal");
+    expect(summarizeService(e).choice).toBe(
+      "1 gång på km och 1 gång på år – bör redan vara bytt år 5 (60 mån)",
+    );
+    expect(equalBasisText(2, 60, 60)).toBe(
+      "2 gånger på km och 2 gånger på år – bör redan vara bytt år 10 (120 mån)",
+    );
+    expect(equalBasisText(0, 60, 60)).toMatch(/Inte genomförd än/);
   });
 });
